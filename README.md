@@ -1,7 +1,5 @@
 # LLM Agents for Smart Contract Vulnerability Analysis
 
-![Project Logo](static_analysis/logo.png) <!-- Optional: Add a project logo -->
-
 ## Features
 
 - **Static Analysis**: Utilizes Slither to parse and analyze Solidity contracts, extracting function details and generating call graphs.
