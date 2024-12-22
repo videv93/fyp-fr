@@ -6,3 +6,6 @@
 
 # Pycache
 static_analysis/scripts/__pycache__
+
+# Repomix
+repomix-output.txt
