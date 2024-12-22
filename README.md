@@ -1,4 +1,6 @@
-# LLM Agents for Smart Contract Vulnerability Analysis
+# Generate Vulnerable Transaction Sequences for Smart Contract using Large Language Models
+
+This project utilises a multi-agent workflow to identify vulnerabilities and generate transactions to exploit them. In future iterations we will run these exploits in a sandbox VM to demonstrate them.
 
 ## Features
 
