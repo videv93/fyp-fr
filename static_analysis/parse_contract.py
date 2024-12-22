@@ -2,8 +2,8 @@ from slither import Slither
 from slither.core.declarations.function import Function
 from slither.core.declarations.contract import Contract
 from slither.printers.abstract_printer import AbstractPrinter
-from slither.printers.call.call_graph import PrinterCallGraph
-from all_detectors import DETECTORS
+from .slither_detectors import DETECTORS
+from .call_graph_printer import PrinterCallGraphV2
 from typing import Dict, List
 
 def analyze_contract(filepath: str):
@@ -15,7 +15,7 @@ def analyze_contract(filepath: str):
 
     # Initialize Slither on the given file. This parses and compiles the contract.
     slither = Slither(filepath)
-    printer = PrinterCallGraph(slither, None)
+    printer = PrinterCallGraphV2(slither, None)
     # for detector_class in all_detectors.DETECTORS:
     for detector_class in DETECTORS:
         slither.register_detector(detector_class)
@@ -58,7 +58,7 @@ def analyze_contract(filepath: str):
 
 if __name__ == "__main__":
     # Example usage:
-    filepath = "/Users/advait/Desktop/NTU/fyp-fr/static_analysis/test_contracts/reentrancy.sol"  # Adjust path to your .sol file
+    filepath = "/Users/advait/Desktop/NTU/fyp-fr/static_analysis/test_contracts/code.sol"  # Adjust path to your .sol file
     function_details, cg, detector_results = analyze_contract(filepath)
 
     # Print function details
@@ -76,8 +76,3 @@ if __name__ == "__main__":
     # Returns the Call Graph formatted for DOT files
     print("==== Call Graph ====")
     print(cg['all_contracts'])
-
-    # Print slither detector results
-    # NOTE: This is not really necessary for our purposes, but included for completeness
-    print("==== Detector Results ====")
-    print(detector_results)

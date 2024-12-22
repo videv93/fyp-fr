@@ -1,4 +1,8 @@
 # Virtual Environment
-static_analysis/scripts/.venv
+.venv
+
+# Environment variables
+.env
+
 # Pycache
 static_analysis/scripts/__pycache__

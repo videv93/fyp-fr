@@ -1,0 +1,7 @@
+tiktoken
+langchain
+langchain-community
+openai
+slither-analyzer
+faiss-cpu
+jsonschema
