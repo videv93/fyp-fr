@@ -5,3 +5,4 @@ openai
 slither-analyzer
 faiss-cpu
 jsonschema
+pyyaml

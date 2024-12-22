@@ -37,7 +37,7 @@ class AnalyzerAgent:
         prompt = self._construct_analysis_prompt(contract_info, relevant_docs)
 
         response = self.client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": """You are a smart contract security expert analyzing potential vulnerabilities in an entire contract.
                                                     Consider all functions, their interactions, and the control flow.
