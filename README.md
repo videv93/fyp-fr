@@ -14,6 +14,75 @@ The project is divided into two main components:
 1. **Static Analysis**: Parses and analyzes Solidity contracts to extract detailed information and detect potential issues.
 2. **LLM Agents**: Uses language models to interpret static analysis results, identify vulnerabilities, and suggest exploit strategies.
 
+```mermaid
+graph TB
+    subgraph Main Application
+        main[main.py]
+    end
+
+    subgraph Static Analysis
+        parser[parse_contract.py]
+        callgraph[call_graph_printer.py]
+        detectors[slither_detectors.py]
+
+        parser --> callgraph
+        parser --> detectors
+    end
+
+    subgraph Knowledge Base
+        kb[knowledge_base.py]
+        vectorstore[vectorstore.py]
+        rules[(YAML Rules)]
+
+        kb --> vectorstore
+        rules --> kb
+    end
+
+    subgraph LLM Agents
+        coordinator[agent_coordinator.py]
+        subgraph Agents
+            analyzer[analyzer.py]
+            exploiter[exploiter.py]
+            generator[generator.py]
+        end
+
+        coordinator --> analyzer
+        coordinator --> exploiter
+        coordinator --> generator
+    end
+
+    %% External Dependencies
+    openai[OpenAI API]
+    slither[Slither]
+    faiss[FAISS Vector Store]
+
+    %% Main Flow
+    main --> parser
+    main --> coordinator
+
+    %% Static Analysis Flow
+    parser --> slither
+
+    %% Knowledge Base Flow
+    vectorstore --> faiss
+
+    %% Agent Flow
+    analyzer --> openai
+    analyzer --> vectorstore
+    exploiter --> openai
+    generator --> openai
+
+    %% Data Flow
+    parser -- Contract Info --> coordinator
+    kb -- Vulnerability Patterns --> analyzer
+    analyzer -- Vulnerabilities --> exploiter
+    exploiter -- Exploit Plans --> generator
+
+    class main,coordinator,analyzer,exploiter,generator component
+    class openai,slither,faiss external
+    class rules storage
+```
+
 ## Prerequisites
 
 - Python 3.8+
