@@ -15,7 +15,7 @@ def main():
     kb = VulnerabilityKB()
 
     # 2. Analyze contract
-    filepath = "static_analysis/test_contracts/reentrancy.sol"
+    filepath = "static_analysis/test_contracts/sample.sol"
     function_details, call_graph, detector_results = analyze_contract(filepath)
 
     contract_info = {

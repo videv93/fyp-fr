@@ -1,1041 +1,844 @@
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.3;
+/**
+ *Submitted for verification at BscScan.com on 2021-08-03
+ */
 
+// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.0;
+
+/*
+ * @dev Provides information about the current execution context, including the
+ * sender of the transaction and its data. While these are generally available
+ * via msg.sender and msg.data, they should not be accessed in such a direct
+ * manner, since when dealing with meta-transactions the account sending and
+ * paying for execution may not be the actual sender (as far as an application
+ * is concerned).
+ *
+ * This contract is only required for intermediate, library-like contracts.
+ */
+abstract contract Context {
+    function _msgSender() internal view virtual returns (address) {
+        return msg.sender;
+    }
+
+    function _msgData() internal view virtual returns (bytes calldata) {
+        return msg.data;
+    }
+}
+
+/**
+ * @dev Contract module which provides a basic access control mechanism, where
+ * there is an account (an owner) that can be granted exclusive access to
+ * specific functions.
+ *
+ * By default, the owner account will be the one that deploys the contract. This
+ * can later be changed with {transferOwnership}.
+ *
+ * This module is used through inheritance. It will make available the modifier
+ * `onlyOwner`, which can be applied to your functions to restrict their use to
+ * the owner.
+ */
+abstract contract Ownable is Context {
+    address private _owner;
+
+    event OwnershipTransferred(
+        address indexed previousOwner,
+        address indexed newOwner
+    );
+
+    /**
+     * @dev Initializes the contract setting the deployer as the initial owner.
+     */
+    constructor() {
+        _setOwner(_msgSender());
+    }
+
+    /**
+     * @dev Returns the address of the current owner.
+     */
+    function owner() public view virtual returns (address) {
+        return _owner;
+    }
+
+    /**
+     * @dev Throws if called by any account other than the owner.
+     */
+    modifier onlyOwner() {
+        require(owner() == _msgSender(), "Ownable: caller is not the owner");
+        _;
+    }
+
+    /**
+     * @dev Leaves the contract without owner. It will not be possible to call
+     * `onlyOwner` functions anymore. Can only be called by the current owner.
+     *
+     * NOTE: Renouncing ownership will leave the contract without an owner,
+     * thereby removing any functionality that is only available to the owner.
+     */
+    function renounceOwnership() public virtual onlyOwner {
+        _setOwner(address(0));
+    }
+
+    /**
+     * @dev Transfers ownership of the contract to a new account (`newOwner`).
+     * Can only be called by the current owner.
+     */
+    function transferOwnership(address newOwner) public virtual onlyOwner {
+        require(
+            newOwner != address(0),
+            "Ownable: new owner is the zero address"
+        );
+        _setOwner(newOwner);
+    }
+
+    function _setOwner(address newOwner) private {
+        address oldOwner = _owner;
+        _owner = newOwner;
+        emit OwnershipTransferred(oldOwner, newOwner);
+    }
+}
+
+/**
+ * @dev Contract module which provides a basic access control mechanism, where
+ * there is an account (a withdrawer) that can be granted exclusive access to
+ * specific functions.
+ *
+ * By default, the withdrawer account will be the one that deploys the contract. This
+ * can later be changed with {transferWithdrawership}.
+ *
+ * This module is used through inheritance. It will make available the modifier
+ * `onlyWithdrawer`, which can be applied to your functions to restrict their use to
+ * the withdrawer.
+ */
+abstract contract Withdrawable is Context, Ownable {
+    /**
+     * @dev So here we seperate the rights of the classic ownership into 'owner' and 'withdrawer'
+     * this way the developer/owner stays the 'owner' and can make changes at any time
+     * but cannot withdraw anymore as soon as the 'withdrawer' gets changes (to the chef contract)
+     */
+    address private _withdrawer;
+
+    event WithdrawershipTransferred(
+        address indexed previousWithdrawer,
+        address indexed newWithdrawer
+    );
+
+    /**
+     * @dev Initializes the contract setting the deployer as the initial withdrawer.
+     */
+    constructor() {
+        address msgSender = _msgSender();
+        _withdrawer = msgSender;
+        emit WithdrawershipTransferred(address(0), msgSender);
+    }
+
+    /**
+     * @dev Returns the address of the current withdrawer.
+     */
+    function withdrawer() public view returns (address) {
+        return _withdrawer;
+    }
+
+    /**
+     * @dev Throws if called by any account other than the withdrawer.
+     */
+    modifier onlyWithdrawer() {
+        require(
+            _withdrawer == _msgSender(),
+            "Withdrawable: caller is not the withdrawer"
+        );
+        _;
+    }
+
+    /**
+     * @dev Transfers withdrawership of the contract to a new account (`newWithdrawer`).
+     * Can only be called by the current owner.
+     */
+    function transferWithdrawership(
+        address newWithdrawer
+    ) public virtual onlyOwner {
+        require(
+            newWithdrawer != address(0),
+            "Withdrawable: new withdrawer is the zero address"
+        );
+
+        emit WithdrawershipTransferred(_withdrawer, newWithdrawer);
+        _withdrawer = newWithdrawer;
+    }
+}
+
+/**
+ * @dev Contract module that helps prevent reentrant calls to a function.
+ *
+ * Inheriting from `ReentrancyGuard` will make the {nonReentrant} modifier
+ * available, which can be applied to functions to make sure there are no nested
+ * (reentrant) calls to them.
+ *
+ * Note that because there is a single `nonReentrant` guard, functions marked as
+ * `nonReentrant` may not call one another. This can be worked around by making
+ * those functions `private`, and then adding `external` `nonReentrant` entry
+ * points to them.
+ *
+ * TIP: If you would like to learn more about reentrancy and alternative ways
+ * to protect against it, check out our blog post
+ * https://blog.openzeppelin.com/reentrancy-after-istanbul/[Reentrancy After Istanbul].
+ */
+abstract contract ReentrancyGuard {
+    // Booleans are more expensive than uint256 or any type that takes up a full
+    // word because each write operation emits an extra SLOAD to first read the
+    // slot's contents, replace the bits taken up by the boolean, and then write
+    // back. This is the compiler's defense against contract upgrades and
+    // pointer aliasing, and it cannot be disabled.
+
+    // The values being non-zero value makes deployment a bit more expensive,
+    // but in exchange the refund on every call to nonReentrant will be lower in
+    // amount. Since refunds are capped to a percentage of the total
+    // transaction's gas, it is best to keep them low in cases like this one, to
+    // increase the likelihood of the full refund coming into effect.
+    uint256 private constant _NOT_ENTERED = 1;
+    uint256 private constant _ENTERED = 2;
+
+    uint256 private _status;
+
+    constructor() {
+        _status = _NOT_ENTERED;
+    }
+
+    /**
+     * @dev Prevents a contract from calling itself, directly or indirectly.
+     * Calling a `nonReentrant` function from another `nonReentrant`
+     * function is not supported. It is possible to prevent this from happening
+     * by making the `nonReentrant` function external, and make it call a
+     * `private` function that does the actual work.
+     */
+    modifier nonReentrant() {
+        // On the first call to nonReentrant, _notEntered will be true
+        require(_status != _ENTERED, "ReentrancyGuard: reentrant call");
+
+        // Any calls to nonReentrant after this point will fail
+        _status = _ENTERED;
+
+        _;
+
+        // By storing the original value once again, a refund is triggered (see
+        // https://eips.ethereum.org/EIPS/eip-2200)
+        _status = _NOT_ENTERED;
+    }
+}
+
+/**
+ * @dev Interface of the ERC20 standard as defined in the EIP.
+ */
 interface IERC20 {
+    /**
+     * @dev Returns the amount of tokens in existence.
+     */
+    function totalSupply() external view returns (uint256);
+
+    /**
+     * @dev Returns the amount of tokens owned by `account`.
+     */
     function balanceOf(address account) external view returns (uint256);
 
+    /**
+     * @dev Moves `amount` tokens from the caller's account to `recipient`.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits a {Transfer} event.
+     */
     function transfer(
         address recipient,
         uint256 amount
     ) external returns (bool);
 
+    /**
+     * @dev Returns the remaining number of tokens that `spender` will be
+     * allowed to spend on behalf of `owner` through {transferFrom}. This is
+     * zero by default.
+     *
+     * This value changes when {approve} or {transferFrom} are called.
+     */
+    function allowance(
+        address owner,
+        address spender
+    ) external view returns (uint256);
+
+    /**
+     * @dev Sets `amount` as the allowance of `spender` over the caller's tokens.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * IMPORTANT: Beware that changing an allowance with this method brings the risk
+     * that someone may use both the old and the new allowance by unfortunate
+     * transaction ordering. One possible solution to mitigate this race
+     * condition is to first reduce the spender's allowance to 0 and set the
+     * desired value afterwards:
+     * https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729
+     *
+     * Emits an {Approval} event.
+     */
+    function approve(address spender, uint256 amount) external returns (bool);
+
+    /**
+     * @dev Moves `amount` tokens from `sender` to `recipient` using the
+     * allowance mechanism. `amount` is then deducted from the caller's
+     * allowance.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits a {Transfer} event.
+     */
     function transferFrom(
         address sender,
         address recipient,
         uint256 amount
     ) external returns (bool);
+
+    /**
+     * @dev Emitted when `value` tokens are moved from one account (`from`) to
+     * another (`to`).
+     *
+     * Note that `value` may be zero.
+     */
+    event Transfer(address indexed from, address indexed to, uint256 value);
+
+    /**
+     * @dev Emitted when the allowance of a `spender` for an `owner` is set by
+     * a call to {approve}. `value` is the new allowance.
+     */
+    event Approval(
+        address indexed owner,
+        address indexed spender,
+        uint256 value
+    );
 }
 
 /**
- @author Tellor Inc.
- @title TellorFlex
- @dev This is a streamlined Tellor oracle system which handles staking, reporting,
- * slashing, and user data getters in one contract. This contract is controlled
- * by a single address known as 'governance', which could be an externally owned
- * account or a contract, allowing for a flexible, modular design.
-*/
-contract TellorFlex {
-    // Storage
-    IERC20 public token; // token used for staking and rewards
-    address public governance; // address with ability to remove values and slash reporters
-    address public owner; // contract deployer, can call init function once
-    uint256 public accumulatedRewardPerShare; // accumulated staking reward per staked token
-    uint256 public minimumStakeAmount; // minimum amount of tokens required to stake
-    uint256 public reportingLock; // base amount of time before a reporter is able to submit a value again
-    uint256 public rewardRate; // total staking rewards released per second
-    uint256 public stakeAmount; // minimum amount required to be a staker
-    uint256 public stakeAmountDollarTarget; // amount of US dollars required to be a staker
-    uint256 public stakingRewardsBalance; // total amount of staking rewards
-    bytes32 public stakingTokenPriceQueryId; // staking token SpotPrice queryId, used for updating stakeAmount
-    uint256 public timeBasedReward = 5e17; // amount of TB rewards released per 5 minutes
-    uint256 public timeOfLastAllocation; // time of last update to accumulatedRewardPerShare
-    uint256 public timeOfLastNewValue = block.timestamp; // time of the last new submitted value, originally set to the block timestamp
-    uint256 public totalRewardDebt; // staking reward debt, used to calculate real staking rewards balance
-    uint256 public totalStakeAmount; // total amount of tokens locked in contract (via stake)
-    uint256 public totalStakers; // total number of stakers with at least stakeAmount staked, not exact
-    uint256 public toWithdraw; //amountLockedForWithdrawal
-
-    mapping(bytes32 => Report) private reports; // mapping of query IDs to a report
-    mapping(address => StakeInfo) private stakerDetails; // mapping from a persons address to their staking info
-
-    // Structs
-    struct Report {
-        uint256[] timestamps; // array of all newValueTimestamps reported
-        mapping(uint256 => uint256) timestampIndex; // mapping of timestamps to respective indices
-        mapping(uint256 => uint256) timestampToBlockNum; // mapping of timestamp to block number
-        mapping(uint256 => bytes) valueByTimestamp; // mapping of timestamps to values
-        mapping(uint256 => address) reporterByTimestamp; // mapping of timestamps to reporters
-        mapping(uint256 => bool) isDisputed;
-    }
-
-    struct StakeInfo {
-        uint256 startDate; // stake or withdrawal request start date
-        uint256 stakedBalance; // staked token balance
-        uint256 lockedBalance; // amount locked for withdrawal
-        uint256 rewardDebt; // used for staking reward calculation
-        uint256 reporterLastTimestamp; // timestamp of reporter's last reported value
-        uint256 reportsSubmitted; // total number of reports submitted by reporter
-        uint256 startVoteCount; // total number of governance votes when stake deposited
-        uint256 startVoteTally; // staker vote tally when stake deposited
-        bool staked; // used to keep track of total stakers
-        mapping(bytes32 => uint256) reportsSubmittedByQueryId; // mapping of queryId to number of reports submitted by reporter
-    }
-
-    // Events
-    event NewReport(
-        bytes32 indexed _queryId,
-        uint256 indexed _time,
-        bytes _value,
-        uint256 _nonce,
-        bytes _queryData,
-        address indexed _reporter
-    );
-    event NewStakeAmount(uint256 _newStakeAmount);
-    event NewStaker(address indexed _staker, uint256 indexed _amount);
-    event ReporterSlashed(
-        address indexed _reporter,
-        address _recipient,
-        uint256 _slashAmount
-    );
-    event StakeWithdrawn(address _staker);
-    event StakeWithdrawRequested(address _staker, uint256 _amount);
-    event ValueRemoved(bytes32 _queryId, uint256 _timestamp);
-
-    // Functions
+ * @dev Collection of functions related to the address type
+ */
+library Address {
     /**
-     * @dev Initializes system parameters
-     * @param _token address of token used for staking and rewards
-     * @param _reportingLock base amount of time (seconds) before reporter is able to report again
-     * @param _stakeAmountDollarTarget fixed USD amount that stakeAmount targets on updateStakeAmount
-     * @param _stakingTokenPrice current price of staking token in USD (18 decimals)
-     * @param _stakingTokenPriceQueryId queryId where staking token price is reported
+     * @dev Returns true if `account` is a contract.
+     *
+     * [IMPORTANT]
+     * ====
+     * It is unsafe to assume that an address for which this function returns
+     * false is an externally-owned account (EOA) and not a contract.
+     *
+     * Among others, `isContract` will return false for the following
+     * types of addresses:
+     *
+     *  - an externally-owned account
+     *  - a contract in construction
+     *  - an address where a contract will be created
+     *  - an address where a contract lived, but was destroyed
+     * ====
      */
-    constructor(
-        address _token,
-        uint256 _reportingLock,
-        uint256 _stakeAmountDollarTarget,
-        uint256 _stakingTokenPrice,
-        uint256 _minimumStakeAmount,
-        bytes32 _stakingTokenPriceQueryId
-    ) {
-        require(_token != address(0), "must set token address");
-        require(_stakingTokenPrice > 0, "must set staking token price");
-        require(_reportingLock > 0, "must set reporting lock");
-        require(
-            _stakingTokenPriceQueryId != bytes32(0),
-            "must set staking token price queryId"
-        );
-        token = IERC20(_token);
-        owner = msg.sender;
-        reportingLock = _reportingLock;
-        stakeAmountDollarTarget = _stakeAmountDollarTarget;
-        minimumStakeAmount = _minimumStakeAmount;
-        uint256 _potentialStakeAmount = (_stakeAmountDollarTarget * 1e18) /
-            _stakingTokenPrice;
-        if (_potentialStakeAmount < _minimumStakeAmount) {
-            stakeAmount = _minimumStakeAmount;
-        } else {
-            stakeAmount = _potentialStakeAmount;
+    function isContract(address account) internal view returns (bool) {
+        // This method relies on extcodesize, which returns 0 for contracts in
+        // construction, since the code is only stored at the end of the
+        // constructor execution.
+
+        uint256 size;
+        assembly {
+            size := extcodesize(account)
         }
-        stakingTokenPriceQueryId = _stakingTokenPriceQueryId;
+        return size > 0;
     }
 
     /**
-     * @dev Allows the owner to initialize the governance (flex addy needed for governance deployment)
-     * @param _governanceAddress address of governance contract (github.com/tellor-io/governance)
+     * @dev Replacement for Solidity's `transfer`: sends `amount` wei to
+     * `recipient`, forwarding all available gas and reverting on errors.
+     *
+     * https://eips.ethereum.org/EIPS/eip-1884[EIP1884] increases the gas cost
+     * of certain opcodes, possibly making contracts go over the 2300 gas limit
+     * imposed by `transfer`, making them unable to receive funds via
+     * `transfer`. {sendValue} removes this limitation.
+     *
+     * https://diligence.consensys.net/posts/2019/09/stop-using-soliditys-transfer-now/[Learn more].
+     *
+     * IMPORTANT: because control is transferred to `recipient`, care must be
+     * taken to not create reentrancy vulnerabilities. Consider using
+     * {ReentrancyGuard} or the
+     * https://solidity.readthedocs.io/en/v0.5.11/security-considerations.html#use-the-checks-effects-interactions-pattern[checks-effects-interactions pattern].
      */
-    function init(address _governanceAddress) external {
-        require(msg.sender == owner, "only owner can set governance address");
-        require(governance == address(0), "governance address already set");
+    function sendValue(address payable recipient, uint256 amount) internal {
         require(
-            _governanceAddress != address(0),
-            "governance address can't be zero address"
+            address(this).balance >= amount,
+            "Address: insufficient balance"
         );
-        governance = _governanceAddress;
-    }
 
-    /**
-     * @dev Funds the Flex contract with staking rewards (paid by autopay and minting)
-     * @param _amount amount of tokens to fund contract with
-     */
-    function addStakingRewards(uint256 _amount) external {
-        require(token.transferFrom(msg.sender, address(this), _amount));
-        _updateRewards();
-        stakingRewardsBalance += _amount;
-        // update reward rate = real staking rewards balance / 30 days
-        rewardRate =
-            (stakingRewardsBalance -
-                ((accumulatedRewardPerShare * totalStakeAmount) /
-                    1e18 -
-                    totalRewardDebt)) /
-            30 days;
-    }
-
-    /**
-     * @dev Allows a reporter to submit stake
-     * @param _amount amount of tokens to stake
-     */
-    function depositStake(uint256 _amount) external {
-        require(governance != address(0), "governance address not set");
-        StakeInfo storage _staker = stakerDetails[msg.sender];
-        uint256 _stakedBalance = _staker.stakedBalance;
-        uint256 _lockedBalance = _staker.lockedBalance;
-        if (_lockedBalance > 0) {
-            if (_lockedBalance >= _amount) {
-                // if staker's locked balance covers full _amount, use that
-                _staker.lockedBalance -= _amount;
-                toWithdraw -= _amount;
-            } else {
-                // otherwise, stake the whole locked balance and transfer the
-                // remaining amount from the staker's address
-                require(
-                    token.transferFrom(
-                        msg.sender,
-                        address(this),
-                        _amount - _lockedBalance
-                    )
-                );
-                toWithdraw -= _staker.lockedBalance;
-                _staker.lockedBalance = 0;
-            }
-        } else {
-            if (_stakedBalance == 0) {
-                // if staked balance and locked balance equal 0, save current vote tally.
-                // voting participation used for calculating rewards
-                (bool _success, bytes memory _returnData) = governance.call(
-                    abi.encodeWithSignature("getVoteCount()")
-                );
-                if (_success) {
-                    _staker.startVoteCount = uint256(
-                        abi.decode(_returnData, (uint256))
-                    );
-                }
-                (_success, _returnData) = governance.call(
-                    abi.encodeWithSignature(
-                        "getVoteTallyByAddress(address)",
-                        msg.sender
-                    )
-                );
-                if (_success) {
-                    _staker.startVoteTally = abi.decode(_returnData, (uint256));
-                }
-            }
-            require(token.transferFrom(msg.sender, address(this), _amount));
-        }
-        _updateStakeAndPayRewards(msg.sender, _stakedBalance + _amount);
-        _staker.startDate = block.timestamp; // This resets the staker start date to now
-        emit NewStaker(msg.sender, _amount);
-    }
-
-    /**
-     * @dev Removes a value from the oracle.
-     * Note: this function is only callable by the Governance contract.
-     * @param _queryId is ID of the specific data feed
-     * @param _timestamp is the timestamp of the data value to remove
-     */
-    function removeValue(bytes32 _queryId, uint256 _timestamp) external {
-        require(msg.sender == governance, "caller must be governance address");
-        Report storage _report = reports[_queryId];
-        require(!_report.isDisputed[_timestamp], "value already disputed");
-        uint256 _index = _report.timestampIndex[_timestamp];
-        require(_timestamp == _report.timestamps[_index], "invalid timestamp");
-        _report.valueByTimestamp[_timestamp] = "";
-        _report.isDisputed[_timestamp] = true;
-        emit ValueRemoved(_queryId, _timestamp);
-    }
-
-    /**
-     * @dev Allows a reporter to request to withdraw their stake
-     * @param _amount amount of staked tokens requesting to withdraw
-     */
-    function requestStakingWithdraw(uint256 _amount) external {
-        StakeInfo storage _staker = stakerDetails[msg.sender];
+        (bool success, ) = recipient.call{value: amount}("");
         require(
-            _staker.stakedBalance >= _amount,
-            "insufficient staked balance"
+            success,
+            "Address: unable to send value, recipient may have reverted"
         );
-        _updateStakeAndPayRewards(msg.sender, _staker.stakedBalance - _amount);
-        _staker.startDate = block.timestamp;
-        _staker.lockedBalance += _amount;
-        toWithdraw += _amount;
-        emit StakeWithdrawRequested(msg.sender, _amount);
     }
 
     /**
-     * @dev Slashes a reporter and transfers their stake amount to the given recipient
-     * Note: this function is only callable by the governance address.
-     * @param _reporter is the address of the reporter being slashed
-     * @param _recipient is the address receiving the reporter's stake
-     * @return _slashAmount uint256 amount of token slashed and sent to recipient address
+     * @dev Performs a Solidity function call using a low level `call`. A
+     * plain `call` is an unsafe replacement for a function call: use this
+     * function instead.
+     *
+     * If `target` reverts with a revert reason, it is bubbled up by this
+     * function (like regular Solidity function calls).
+     *
+     * Returns the raw returned data. To convert to the expected return value,
+     * use https://solidity.readthedocs.io/en/latest/units-and-global-variables.html?highlight=abi.decode#abi-encoding-and-decoding-functions[`abi.decode`].
+     *
+     * Requirements:
+     *
+     * - `target` must be a contract.
+     * - calling `target` with `data` must not revert.
+     *
+     * _Available since v3.1._
      */
-    function slashReporter(
-        address _reporter,
-        address _recipient
-    ) external returns (uint256 _slashAmount) {
-        require(msg.sender == governance, "only governance can slash reporter");
-        StakeInfo storage _staker = stakerDetails[_reporter];
-        uint256 _stakedBalance = _staker.stakedBalance;
-        uint256 _lockedBalance = _staker.lockedBalance;
-        require(_stakedBalance + _lockedBalance > 0, "zero staker balance");
-        if (_lockedBalance >= stakeAmount) {
-            // if locked balance is at least stakeAmount, slash from locked balance
-            _slashAmount = stakeAmount;
-            _staker.lockedBalance -= stakeAmount;
-            toWithdraw -= stakeAmount;
-        } else if (_lockedBalance + _stakedBalance >= stakeAmount) {
-            // if locked balance + staked balance is at least stakeAmount,
-            // slash from locked balance and slash remainder from staked balance
-            _slashAmount = stakeAmount;
-            _updateStakeAndPayRewards(
-                _reporter,
-                _stakedBalance - (stakeAmount - _lockedBalance)
+    function functionCall(
+        address target,
+        bytes memory data
+    ) internal returns (bytes memory) {
+        return functionCall(target, data, "Address: low-level call failed");
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-}[`functionCall`], but with
+     * `errorMessage` as a fallback revert reason when `target` reverts.
+     *
+     * _Available since v3.1._
+     */
+    function functionCall(
+        address target,
+        bytes memory data,
+        string memory errorMessage
+    ) internal returns (bytes memory) {
+        return functionCallWithValue(target, data, 0, errorMessage);
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-}[`functionCall`],
+     * but also transferring `value` wei to `target`.
+     *
+     * Requirements:
+     *
+     * - the calling contract must have an ETH balance of at least `value`.
+     * - the called Solidity function must be `payable`.
+     *
+     * _Available since v3.1._
+     */
+    function functionCallWithValue(
+        address target,
+        bytes memory data,
+        uint256 value
+    ) internal returns (bytes memory) {
+        return
+            functionCallWithValue(
+                target,
+                data,
+                value,
+                "Address: low-level call with value failed"
             );
-            toWithdraw -= _lockedBalance;
-            _staker.lockedBalance = 0;
-        } else {
-            // if sum(locked balance + staked balance) is less than stakeAmount,
-            // slash sum
-            _slashAmount = _stakedBalance + _lockedBalance;
-            toWithdraw -= _lockedBalance;
-            _updateStakeAndPayRewards(_reporter, 0);
-            _staker.lockedBalance = 0;
-        }
-        require(token.transfer(_recipient, _slashAmount));
-        emit ReporterSlashed(_reporter, _recipient, _slashAmount);
     }
 
     /**
-     * @dev Allows a reporter to submit a value to the oracle
-     * @param _queryId is ID of the specific data feed. Equals keccak256(_queryData) for non-legacy IDs
-     * @param _value is the value the user submits to the oracle
-     * @param _nonce is the current value count for the query id
-     * @param _queryData is the data used to fulfill the data query
+     * @dev Same as {xref-Address-functionCallWithValue-address-bytes-uint256-}[`functionCallWithValue`], but
+     * with `errorMessage` as a fallback revert reason when `target` reverts.
+     *
+     * _Available since v3.1._
      */
-    function submitValue(
-        bytes32 _queryId,
-        bytes calldata _value,
-        uint256 _nonce,
-        bytes calldata _queryData
-    ) external {
-        require(keccak256(_value) != keccak256(""), "value must be submitted");
-        Report storage _report = reports[_queryId];
+    function functionCallWithValue(
+        address target,
+        bytes memory data,
+        uint256 value,
+        string memory errorMessage
+    ) internal returns (bytes memory) {
         require(
-            _nonce == _report.timestamps.length || _nonce == 0,
-            "nonce must match timestamp index"
+            address(this).balance >= value,
+            "Address: insufficient balance for call"
         );
-        StakeInfo storage _staker = stakerDetails[msg.sender];
-        require(
-            _staker.stakedBalance >= stakeAmount,
-            "balance must be greater than stake amount"
+        require(isContract(target), "Address: call to non-contract");
+
+        (bool success, bytes memory returndata) = target.call{value: value}(
+            data
         );
-        // Require reporter to abide by given reporting lock
-        require(
-            (block.timestamp - _staker.reporterLastTimestamp) * 1000 >
-                (reportingLock * 1000) / (_staker.stakedBalance / stakeAmount),
-            "still in reporter time lock, please wait!"
-        );
-        require(
-            _queryId == keccak256(_queryData),
-            "query id must be hash of query data"
-        );
-        _staker.reporterLastTimestamp = block.timestamp;
-        // Checks for no double reporting of timestamps
-        require(
-            _report.reporterByTimestamp[block.timestamp] == address(0),
-            "timestamp already reported for"
-        );
-        // Update number of timestamps, value for given timestamp, and reporter for timestamp
-        _report.timestampIndex[block.timestamp] = _report.timestamps.length;
-        _report.timestamps.push(block.timestamp);
-        _report.timestampToBlockNum[block.timestamp] = block.number;
-        _report.valueByTimestamp[block.timestamp] = _value;
-        _report.reporterByTimestamp[block.timestamp] = msg.sender;
-        // Disperse Time Based Reward
-        uint256 _reward = ((block.timestamp - timeOfLastNewValue) *
-            timeBasedReward) / 300; //.5 TRB per 5 minutes
-        uint256 _totalTimeBasedRewardsBalance = token.balanceOf(address(this)) -
-            (totalStakeAmount + stakingRewardsBalance + toWithdraw);
-        if (_totalTimeBasedRewardsBalance > 0 && _reward > 0) {
-            if (_totalTimeBasedRewardsBalance < _reward) {
-                token.transfer(msg.sender, _totalTimeBasedRewardsBalance);
+        return _verifyCallResult(success, returndata, errorMessage);
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-}[`functionCall`],
+     * but performing a static call.
+     *
+     * _Available since v3.3._
+     */
+    function functionStaticCall(
+        address target,
+        bytes memory data
+    ) internal view returns (bytes memory) {
+        return
+            functionStaticCall(
+                target,
+                data,
+                "Address: low-level static call failed"
+            );
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-string-}[`functionCall`],
+     * but performing a static call.
+     *
+     * _Available since v3.3._
+     */
+    function functionStaticCall(
+        address target,
+        bytes memory data,
+        string memory errorMessage
+    ) internal view returns (bytes memory) {
+        require(isContract(target), "Address: static call to non-contract");
+
+        (bool success, bytes memory returndata) = target.staticcall(data);
+        return _verifyCallResult(success, returndata, errorMessage);
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-}[`functionCall`],
+     * but performing a delegate call.
+     *
+     * _Available since v3.4._
+     */
+    function functionDelegateCall(
+        address target,
+        bytes memory data
+    ) internal returns (bytes memory) {
+        return
+            functionDelegateCall(
+                target,
+                data,
+                "Address: low-level delegate call failed"
+            );
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-string-}[`functionCall`],
+     * but performing a delegate call.
+     *
+     * _Available since v3.4._
+     */
+    function functionDelegateCall(
+        address target,
+        bytes memory data,
+        string memory errorMessage
+    ) internal returns (bytes memory) {
+        require(isContract(target), "Address: delegate call to non-contract");
+
+        (bool success, bytes memory returndata) = target.delegatecall(data);
+        return _verifyCallResult(success, returndata, errorMessage);
+    }
+
+    function _verifyCallResult(
+        bool success,
+        bytes memory returndata,
+        string memory errorMessage
+    ) private pure returns (bytes memory) {
+        if (success) {
+            return returndata;
+        } else {
+            // Look for revert reason and bubble it up if present
+            if (returndata.length > 0) {
+                // The easiest way to bubble the revert reason is using memory via assembly
+
+                assembly {
+                    let returndata_size := mload(returndata)
+                    revert(add(32, returndata), returndata_size)
+                }
             } else {
-                token.transfer(msg.sender, _reward);
+                revert(errorMessage);
             }
         }
-        // Update last oracle value and number of values submitted by a reporter
-        timeOfLastNewValue = block.timestamp;
-        _staker.reportsSubmitted++;
-        _staker.reportsSubmittedByQueryId[_queryId]++;
-        emit NewReport(
-            _queryId,
-            block.timestamp,
-            _value,
-            _nonce,
-            _queryData,
-            msg.sender
+    }
+}
+
+/**
+ * @title SafeERC20
+ * @dev Wrappers around ERC20 operations that throw on failure (when the token
+ * contract returns false). Tokens that return no value (and instead revert or
+ * throw on failure) are also supported, non-reverting calls are assumed to be
+ * successful.
+ * To use this library you can add a `using SafeERC20 for IERC20;` statement to your contract,
+ * which allows you to call the safe operations as `token.safeTransfer(...)`, etc.
+ */
+library SafeERC20 {
+    using Address for address;
+
+    function safeTransfer(IERC20 token, address to, uint256 value) internal {
+        _callOptionalReturn(
+            token,
+            abi.encodeWithSelector(token.transfer.selector, to, value)
+        );
+    }
+
+    function safeTransferFrom(
+        IERC20 token,
+        address from,
+        address to,
+        uint256 value
+    ) internal {
+        _callOptionalReturn(
+            token,
+            abi.encodeWithSelector(token.transferFrom.selector, from, to, value)
         );
     }
 
     /**
-     * @dev Updates the stake amount after retrieving the latest
-     * 12+-hour-old staking token price from the oracle
+     * @dev Deprecated. This function has issues similar to the ones found in
+     * {IERC20-approve}, and its usage is discouraged.
+     *
+     * Whenever possible, use {safeIncreaseAllowance} and
+     * {safeDecreaseAllowance} instead.
      */
-    function updateStakeAmount() external {
-        // get staking token price
-        (bool _valFound, bytes memory _val, ) = getDataBefore(
-            stakingTokenPriceQueryId,
-            block.timestamp - 12 hours
+    function safeApprove(
+        IERC20 token,
+        address spender,
+        uint256 value
+    ) internal {
+        // safeApprove should only be called when setting an initial allowance,
+        // or when resetting it to zero. To increase and decrease it, use
+        // 'safeIncreaseAllowance' and 'safeDecreaseAllowance'
+        require(
+            (value == 0) || (token.allowance(address(this), spender) == 0),
+            "SafeERC20: approve from non-zero to non-zero allowance"
         );
-        if (_valFound) {
-            uint256 _stakingTokenPrice = abi.decode(_val, (uint256));
+        _callOptionalReturn(
+            token,
+            abi.encodeWithSelector(token.approve.selector, spender, value)
+        );
+    }
+
+    function safeIncreaseAllowance(
+        IERC20 token,
+        address spender,
+        uint256 value
+    ) internal {
+        uint256 newAllowance = token.allowance(address(this), spender) + value;
+        _callOptionalReturn(
+            token,
+            abi.encodeWithSelector(
+                token.approve.selector,
+                spender,
+                newAllowance
+            )
+        );
+    }
+
+    function safeDecreaseAllowance(
+        IERC20 token,
+        address spender,
+        uint256 value
+    ) internal {
+        unchecked {
+            uint256 oldAllowance = token.allowance(address(this), spender);
             require(
-                _stakingTokenPrice >= 0.01 ether &&
-                    _stakingTokenPrice < 1000000 ether,
-                "invalid staking token price"
+                oldAllowance >= value,
+                "SafeERC20: decreased allowance below zero"
             );
-
-            uint256 _adjustedStakeAmount = (stakeAmountDollarTarget * 1e18) /
-                _stakingTokenPrice;
-            if (_adjustedStakeAmount < minimumStakeAmount) {
-                stakeAmount = minimumStakeAmount;
-            } else {
-                stakeAmount = _adjustedStakeAmount;
-            }
-            emit NewStakeAmount(stakeAmount);
-        }
-    }
-
-    /**
-     * @dev Withdraws a reporter's stake after the lock period expires
-     */
-    function withdrawStake() external {
-        StakeInfo storage _staker = stakerDetails[msg.sender];
-        // Ensure reporter is locked and that enough time has passed
-        require(
-            block.timestamp - _staker.startDate >= 7 days,
-            "7 days didn't pass"
-        );
-        require(
-            _staker.lockedBalance > 0,
-            "reporter not locked for withdrawal"
-        );
-        require(token.transfer(msg.sender, _staker.lockedBalance));
-        toWithdraw -= _staker.lockedBalance;
-        _staker.lockedBalance = 0;
-        emit StakeWithdrawn(msg.sender);
-    }
-
-    // *****************************************************************************
-    // *                                                                           *
-    // *                               Getters                                     *
-    // *                                                                           *
-    // *****************************************************************************
-
-    /**
-     * @dev Returns the block number at a given timestamp
-     * @param _queryId is ID of the specific data feed
-     * @param _timestamp is the timestamp to find the corresponding block number for
-     * @return uint256 block number of the timestamp for the given data ID
-     */
-    function getBlockNumberByTimestamp(
-        bytes32 _queryId,
-        uint256 _timestamp
-    ) external view returns (uint256) {
-        return reports[_queryId].timestampToBlockNum[_timestamp];
-    }
-
-    /**
-     * @dev Returns the current value of a data feed given a specific ID
-     * @param _queryId is the ID of the specific data feed
-     * @return _value the latest submitted value for the given queryId
-     */
-    function getCurrentValue(
-        bytes32 _queryId
-    ) external view returns (bytes memory _value) {
-        bool _didGet;
-        (_didGet, _value, ) = getDataBefore(_queryId, block.timestamp + 1);
-        if (!_didGet) {
-            revert();
-        }
-    }
-
-    /**
-     * @dev Retrieves the latest value for the queryId before the specified timestamp
-     * @param _queryId is the queryId to look up the value for
-     * @param _timestamp before which to search for latest value
-     * @return _ifRetrieve bool true if able to retrieve a non-zero value
-     * @return _value the value retrieved
-     * @return _timestampRetrieved the value's timestamp
-     */
-    function getDataBefore(
-        bytes32 _queryId,
-        uint256 _timestamp
-    )
-        public
-        view
-        returns (
-            bool _ifRetrieve,
-            bytes memory _value,
-            uint256 _timestampRetrieved
-        )
-    {
-        (bool _found, uint256 _index) = getIndexForDataBefore(
-            _queryId,
-            _timestamp
-        );
-        if (!_found) return (false, bytes(""), 0);
-        _timestampRetrieved = getTimestampbyQueryIdandIndex(_queryId, _index);
-        _value = retrieveData(_queryId, _timestampRetrieved);
-        return (true, _value, _timestampRetrieved);
-    }
-
-    /**
-     * @dev Returns governance address
-     * @return address governance
-     */
-    function getGovernanceAddress() external view returns (address) {
-        return governance;
-    }
-
-    /**
-     * @dev Counts the number of values that have been submitted for the request.
-     * @param _queryId the id to look up
-     * @return uint256 count of the number of values received for the id
-     */
-    function getNewValueCountbyQueryId(
-        bytes32 _queryId
-    ) public view returns (uint256) {
-        return reports[_queryId].timestamps.length;
-    }
-
-    /**
-     * @dev Returns the pending staking reward for a given address
-     * @param _stakerAddress staker address to look up
-     * @return _pendingReward - pending reward for given staker
-     */
-    function getPendingRewardByStaker(
-        address _stakerAddress
-    ) external returns (uint256 _pendingReward) {
-        StakeInfo storage _staker = stakerDetails[_stakerAddress];
-        _pendingReward =
-            (_staker.stakedBalance * _getUpdatedAccumulatedRewardPerShare()) /
-            1e18 -
-            _staker.rewardDebt;
-        (bool _success, bytes memory _returnData) = governance.call(
-            abi.encodeWithSignature("getVoteCount()")
-        );
-        uint256 _numberOfVotes;
-        if (_success) {
-            _numberOfVotes =
-                uint256(abi.decode(_returnData, (uint256))) -
-                _staker.startVoteCount;
-        }
-        if (_numberOfVotes > 0) {
-            (_success, _returnData) = governance.call(
-                abi.encodeWithSignature(
-                    "getVoteTallyByAddress(address)",
-                    _stakerAddress
+            uint256 newAllowance = oldAllowance - value;
+            _callOptionalReturn(
+                token,
+                abi.encodeWithSelector(
+                    token.approve.selector,
+                    spender,
+                    newAllowance
                 )
             );
-            if (_success) {
-                _pendingReward =
-                    (_pendingReward *
-                        (abi.decode(_returnData, (uint256)) -
-                            _staker.startVoteTally)) /
-                    _numberOfVotes;
-            }
         }
     }
 
     /**
-     * @dev Returns the real staking rewards balance after accounting for unclaimed rewards
-     * @return uint256 real staking rewards balance
+     * @dev Imitates a Solidity high-level call (i.e. a regular function call to a contract), relaxing the requirement
+     * on the return value: the return value is optional (but if data is returned, it must not be false).
+     * @param token The token targeted by the call.
+     * @param data The call data (encoded using abi.encode or one of its variants).
      */
-    function getRealStakingRewardsBalance() external view returns (uint256) {
-        uint256 _pendingRewards = (_getUpdatedAccumulatedRewardPerShare() *
-            totalStakeAmount) /
-            1e18 -
-            totalRewardDebt;
-        return (stakingRewardsBalance - _pendingRewards);
-    }
+    function _callOptionalReturn(IERC20 token, bytes memory data) private {
+        // We need to perform a low level call here, to bypass Solidity's return data size checking mechanism, since
+        // we're implementing it ourselves. We use {Address.functionCall} to perform this call, which verifies that
+        // the target address contains contract code and also asserts for success in the low-level call.
 
-    /**
-     * @dev Returns reporter address and whether a value was removed for a given queryId and timestamp
-     * @param _queryId the id to look up
-     * @param _timestamp is the timestamp of the value to look up
-     * @return address reporter who submitted the value
-     * @return bool true if the value was removed
-     */
-    function getReportDetails(
-        bytes32 _queryId,
-        uint256 _timestamp
-    ) external view returns (address, bool) {
-        return (
-            reports[_queryId].reporterByTimestamp[_timestamp],
-            reports[_queryId].isDisputed[_timestamp]
+        bytes memory returndata = address(token).functionCall(
+            data,
+            "SafeERC20: low-level call failed"
         );
-    }
-
-    /**
-     * @dev Returns the address of the reporter who submitted a value for a data ID at a specific time
-     * @param _queryId is ID of the specific data feed
-     * @param _timestamp is the timestamp to find a corresponding reporter for
-     * @return address of the reporter who reported the value for the data ID at the given timestamp
-     */
-    function getReporterByTimestamp(
-        bytes32 _queryId,
-        uint256 _timestamp
-    ) external view returns (address) {
-        return reports[_queryId].reporterByTimestamp[_timestamp];
-    }
-
-    /**
-     * @dev Returns the timestamp of the reporter's last submission
-     * @param _reporter is address of the reporter
-     * @return uint256 timestamp of the reporter's last submission
-     */
-    function getReporterLastTimestamp(
-        address _reporter
-    ) external view returns (uint256) {
-        return stakerDetails[_reporter].reporterLastTimestamp;
-    }
-
-    /**
-     * @dev Returns the reporting lock time, the amount of time a reporter must wait to submit again
-     * @return uint256 reporting lock time
-     */
-    function getReportingLock() external view returns (uint256) {
-        return reportingLock;
-    }
-
-    /**
-     * @dev Returns the number of values submitted by a specific reporter address
-     * @param _reporter is the address of a reporter
-     * @return uint256 the number of values submitted by the given reporter
-     */
-    function getReportsSubmittedByAddress(
-        address _reporter
-    ) external view returns (uint256) {
-        return stakerDetails[_reporter].reportsSubmitted;
-    }
-
-    /**
-     * @dev Returns the number of values submitted to a specific queryId by a specific reporter address
-     * @param _reporter is the address of a reporter
-     * @param _queryId is the ID of the specific data feed
-     * @return uint256 the number of values submitted by the given reporter to the given queryId
-     */
-    function getReportsSubmittedByAddressAndQueryId(
-        address _reporter,
-        bytes32 _queryId
-    ) external view returns (uint256) {
-        return stakerDetails[_reporter].reportsSubmittedByQueryId[_queryId];
-    }
-
-    /**
-     * @dev Returns amount required to report oracle values
-     * @return uint256 stake amount
-     */
-    function getStakeAmount() external view returns (uint256) {
-        return stakeAmount;
-    }
-
-    /**
-     * @dev Returns all information about a staker
-     * @param _stakerAddress address of staker inquiring about
-     * @return uint startDate of staking
-     * @return uint current amount staked
-     * @return uint current amount locked for withdrawal
-     * @return uint reward debt used to calculate staking rewards
-     * @return uint reporter's last reported timestamp
-     * @return uint total number of reports submitted by reporter
-     * @return uint governance vote count when first staked
-     * @return uint number of votes cast by staker when first staked
-     * @return bool whether staker is counted in totalStakers
-     */
-    function getStakerInfo(
-        address _stakerAddress
-    )
-        external
-        view
-        returns (
-            uint256,
-            uint256,
-            uint256,
-            uint256,
-            uint256,
-            uint256,
-            uint256,
-            uint256,
-            bool
-        )
-    {
-        StakeInfo storage _staker = stakerDetails[_stakerAddress];
-        return (
-            _staker.startDate,
-            _staker.stakedBalance,
-            _staker.lockedBalance,
-            _staker.rewardDebt,
-            _staker.reporterLastTimestamp,
-            _staker.reportsSubmitted,
-            _staker.startVoteCount,
-            _staker.startVoteTally,
-            _staker.staked
-        );
-    }
-
-    /**
-     * @dev Returns the timestamp for the last value of any ID from the oracle
-     * @return uint256 timestamp of the last oracle value
-     */
-    function getTimeOfLastNewValue() external view returns (uint256) {
-        return timeOfLastNewValue;
-    }
-
-    /**
-     * @dev Gets the timestamp for the value based on their index
-     * @param _queryId is the id to look up
-     * @param _index is the value index to look up
-     * @return uint256 timestamp
-     */
-    function getTimestampbyQueryIdandIndex(
-        bytes32 _queryId,
-        uint256 _index
-    ) public view returns (uint256) {
-        return reports[_queryId].timestamps[_index];
-    }
-
-    /**
-     * @dev Retrieves latest array index of data before the specified timestamp for the queryId
-     * @param _queryId is the queryId to look up the index for
-     * @param _timestamp is the timestamp before which to search for the latest index
-     * @return _found whether the index was found
-     * @return _index the latest index found before the specified timestamp
-     */
-    // slither-disable-next-line calls-loop
-    function getIndexForDataBefore(
-        bytes32 _queryId,
-        uint256 _timestamp
-    ) public view returns (bool _found, uint256 _index) {
-        uint256 _count = getNewValueCountbyQueryId(_queryId);
-        if (_count > 0) {
-            uint256 _middle;
-            uint256 _start = 0;
-            uint256 _end = _count - 1;
-            uint256 _time;
-            //Checking Boundaries to short-circuit the algorithm
-            _time = getTimestampbyQueryIdandIndex(_queryId, _start);
-            if (_time >= _timestamp) return (false, 0);
-            _time = getTimestampbyQueryIdandIndex(_queryId, _end);
-            if (_time < _timestamp) {
-                while (isInDispute(_queryId, _time) && _end > 0) {
-                    _end--;
-                    _time = getTimestampbyQueryIdandIndex(_queryId, _end);
-                }
-                if (_end == 0 && isInDispute(_queryId, _time)) {
-                    return (false, 0);
-                }
-                return (true, _end);
-            }
-            //Since the value is within our boundaries, do a binary search
-            while (true) {
-                _middle = (_end - _start) / 2 + 1 + _start;
-                _time = getTimestampbyQueryIdandIndex(_queryId, _middle);
-                if (_time < _timestamp) {
-                    //get immediate next value
-                    uint256 _nextTime = getTimestampbyQueryIdandIndex(
-                        _queryId,
-                        _middle + 1
-                    );
-                    if (_nextTime >= _timestamp) {
-                        if (!isInDispute(_queryId, _time)) {
-                            // _time is correct
-                            return (true, _middle);
-                        } else {
-                            // iterate backwards until we find a non-disputed value
-                            while (
-                                isInDispute(_queryId, _time) && _middle > 0
-                            ) {
-                                _middle--;
-                                _time = getTimestampbyQueryIdandIndex(
-                                    _queryId,
-                                    _middle
-                                );
-                            }
-                            if (_middle == 0 && isInDispute(_queryId, _time)) {
-                                return (false, 0);
-                            }
-                            // _time is correct
-                            return (true, _middle);
-                        }
-                    } else {
-                        //look from middle + 1(next value) to end
-                        _start = _middle + 1;
-                    }
-                } else {
-                    uint256 _prevTime = getTimestampbyQueryIdandIndex(
-                        _queryId,
-                        _middle - 1
-                    );
-                    if (_prevTime < _timestamp) {
-                        if (!isInDispute(_queryId, _prevTime)) {
-                            // _prevTime is correct
-                            return (true, _middle - 1);
-                        } else {
-                            // iterate backwards until we find a non-disputed value
-                            _middle--;
-                            while (
-                                isInDispute(_queryId, _prevTime) && _middle > 0
-                            ) {
-                                _middle--;
-                                _prevTime = getTimestampbyQueryIdandIndex(
-                                    _queryId,
-                                    _middle
-                                );
-                            }
-                            if (
-                                _middle == 0 && isInDispute(_queryId, _prevTime)
-                            ) {
-                                return (false, 0);
-                            }
-                            // _prevtime is correct
-                            return (true, _middle);
-                        }
-                    } else {
-                        //look from start to middle -1(prev value)
-                        _end = _middle - 1;
-                    }
-                }
-            }
-        }
-        return (false, 0);
-    }
-
-    /**
-     * @dev Returns the index of a reporter timestamp in the timestamp array for a specific data ID
-     * @param _queryId is ID of the specific data feed
-     * @param _timestamp is the timestamp to find in the timestamps array
-     * @return uint256 of the index of the reporter timestamp in the array for specific ID
-     */
-    function getTimestampIndexByTimestamp(
-        bytes32 _queryId,
-        uint256 _timestamp
-    ) external view returns (uint256) {
-        return reports[_queryId].timestampIndex[_timestamp];
-    }
-
-    /**
-     * @dev Returns the address of the token used for staking
-     * @return address of the token used for staking
-     */
-    function getTokenAddress() external view returns (address) {
-        return address(token);
-    }
-
-    /**
-     * @dev Returns total amount of token staked for reporting
-     * @return uint256 total amount of token staked
-     */
-    function getTotalStakeAmount() external view returns (uint256) {
-        return totalStakeAmount;
-    }
-
-    /**
-     * @dev Returns total number of current stakers. Reporters with stakedBalance less than stakeAmount are excluded from this total
-     * @return uint256 total stakers
-     */
-    function getTotalStakers() external view returns (uint256) {
-        return totalStakers;
-    }
-
-    /**
-     * @dev Returns total balance of time based rewards in contract
-     * @return uint256 amount of trb
-     */
-    function getTotalTimeBasedRewardsBalance() external view returns (uint256) {
-        return
-            token.balanceOf(address(this)) -
-            (totalStakeAmount + stakingRewardsBalance + toWithdraw);
-    }
-
-    /**
-     * @dev Returns whether a given value is disputed
-     * @param _queryId unique ID of the data feed
-     * @param _timestamp timestamp of the value
-     * @return bool whether the value is disputed
-     */
-    function isInDispute(
-        bytes32 _queryId,
-        uint256 _timestamp
-    ) public view returns (bool) {
-        return reports[_queryId].isDisputed[_timestamp];
-    }
-
-    /**
-     * @dev Retrieve value from oracle based on timestamp
-     * @param _queryId being requested
-     * @param _timestamp to retrieve data/value from
-     * @return bytes value for timestamp submitted
-     */
-    function retrieveData(
-        bytes32 _queryId,
-        uint256 _timestamp
-    ) public view returns (bytes memory) {
-        return reports[_queryId].valueByTimestamp[_timestamp];
-    }
-
-    /**
-     * @dev Used during the upgrade process to verify valid Tellor contracts
-     * @return bool value used to verify valid Tellor contracts
-     */
-    function verify() external pure returns (uint256) {
-        return 9999;
-    }
-
-    // *****************************************************************************
-    // *                                                                           *
-    // *                          Internal functions                               *
-    // *                                                                           *
-    // *****************************************************************************
-
-    /**
-     * @dev Updates accumulated staking rewards per staked token
-     */
-    function _updateRewards() internal {
-        if (timeOfLastAllocation == block.timestamp) {
-            return;
-        }
-        if (totalStakeAmount == 0 || rewardRate == 0) {
-            timeOfLastAllocation = block.timestamp;
-            return;
-        }
-        // calculate accumulated reward per token staked
-        uint256 _newAccumulatedRewardPerShare = accumulatedRewardPerShare +
-            ((block.timestamp - timeOfLastAllocation) * rewardRate * 1e18) /
-            totalStakeAmount;
-        // calculate accumulated reward with _newAccumulatedRewardPerShare
-        uint256 _accumulatedReward = (_newAccumulatedRewardPerShare *
-            totalStakeAmount) /
-            1e18 -
-            totalRewardDebt;
-        if (_accumulatedReward >= stakingRewardsBalance) {
-            // if staking rewards run out, calculate remaining reward per staked
-            // token and set rewardRate to 0
-            uint256 _newPendingRewards = stakingRewardsBalance -
-                ((accumulatedRewardPerShare * totalStakeAmount) /
-                    1e18 -
-                    totalRewardDebt);
-            accumulatedRewardPerShare +=
-                (_newPendingRewards * 1e18) /
-                totalStakeAmount;
-            rewardRate = 0;
-        } else {
-            accumulatedRewardPerShare = _newAccumulatedRewardPerShare;
-        }
-        timeOfLastAllocation = block.timestamp;
-    }
-
-    /**
-     * @dev Called whenever a user's stake amount changes. First updates staking rewards,
-     * transfers pending rewards to user's address, and finally updates user's stake amount
-     * and other relevant variables.
-     * @param _stakerAddress address of user whose stake is being updated
-     * @param _newStakedBalance new staked balance of user
-     */
-    function _updateStakeAndPayRewards(
-        address _stakerAddress,
-        uint256 _newStakedBalance
-    ) internal {
-        _updateRewards();
-        StakeInfo storage _staker = stakerDetails[_stakerAddress];
-        if (_staker.stakedBalance > 0) {
-            // if address already has a staked balance, calculate and transfer pending rewards
-            uint256 _pendingReward = (_staker.stakedBalance *
-                accumulatedRewardPerShare) /
-                1e18 -
-                _staker.rewardDebt;
-            // get staker voting participation rate
-            uint256 _numberOfVotes;
-            (bool _success, bytes memory _returnData) = governance.call(
-                abi.encodeWithSignature("getVoteCount()")
+        if (returndata.length > 0) {
+            // Return data is optional
+            require(
+                abi.decode(returndata, (bool)),
+                "SafeERC20: ERC20 operation did not succeed"
             );
-            if (_success) {
-                _numberOfVotes =
-                    uint256(abi.decode(_returnData, (uint256))) -
-                    _staker.startVoteCount;
-            }
-            if (_numberOfVotes > 0) {
-                // staking reward = pending reward * voting participation rate
-                (_success, _returnData) = governance.call(
-                    abi.encodeWithSignature(
-                        "getVoteTallyByAddress(address)",
-                        _stakerAddress
-                    )
-                );
-                if (_success) {
-                    uint256 _voteTally = abi.decode(_returnData, (uint256));
-                    uint256 _tempPendingReward = (_pendingReward *
-                        (_voteTally - _staker.startVoteTally)) / _numberOfVotes;
-                    if (_tempPendingReward < _pendingReward) {
-                        _pendingReward = _tempPendingReward;
-                    }
-                }
-            }
-            stakingRewardsBalance -= _pendingReward;
-            require(token.transfer(msg.sender, _pendingReward));
-            totalRewardDebt -= _staker.rewardDebt;
-            totalStakeAmount -= _staker.stakedBalance;
-        }
-        _staker.stakedBalance = _newStakedBalance;
-        // Update total stakers
-        if (_staker.stakedBalance >= stakeAmount) {
-            if (_staker.staked == false) {
-                totalStakers++;
-            }
-            _staker.staked = true;
-        } else {
-            if (_staker.staked == true && totalStakers > 0) {
-                totalStakers--;
-            }
-            _staker.staked = false;
-        }
-        // tracks rewards accumulated before stake amount updated
-        _staker.rewardDebt =
-            (_staker.stakedBalance * accumulatedRewardPerShare) /
-            1e18;
-        totalRewardDebt += _staker.rewardDebt;
-        totalStakeAmount += _staker.stakedBalance;
-        // update reward rate if staking rewards are available
-        // given staker's updated parameters
-        if (rewardRate == 0) {
-            rewardRate =
-                (stakingRewardsBalance -
-                    ((accumulatedRewardPerShare * totalStakeAmount) /
-                        1e18 -
-                        totalRewardDebt)) /
-                30 days;
         }
     }
+}
 
-    /**
-     * @dev Internal function retrieves updated accumulatedRewardPerShare
-     * @return uint256 up-to-date accumulated reward per share
-     */
-    function _getUpdatedAccumulatedRewardPerShare()
-        internal
-        view
-        returns (uint256)
-    {
-        if (totalStakeAmount == 0) {
-            return accumulatedRewardPerShare;
+interface IWUSD is IERC20 {
+    function mint(address account, uint256 amount) external;
+
+    function burn(address account, uint256 amount) external;
+}
+
+interface IWswapRouter {
+    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        uint amountIn,
+        uint amountOutMin,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external;
+}
+
+contract WUSDMaster is Ownable, Withdrawable, ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
+    IWUSD public immutable wusd;
+    IERC20 public usdt;
+    IERC20 public wex;
+    IWswapRouter public immutable wswapRouter;
+    address public treasury;
+    address public strategist;
+
+    address[] public swapPath;
+
+    uint public wexPermille = 100;
+    uint public treasuryPermille = 7;
+    uint public feePermille = 0;
+
+    uint256 public maxStakeAmount;
+
+    event Stake(address indexed user, uint256 amount);
+    event Redeem(address indexed user, uint256 amount);
+    event UsdtWithdrawn(uint256 amount);
+    event WexWithdrawn(uint256 amount);
+    event SwapPathChanged(address[] swapPath);
+    event WexPermilleChanged(uint256 wexPermille);
+    event TreasuryPermilleChanged(uint256 treasuryPermille);
+    event FeePermilleChanged(uint256 feePermille);
+    event TreasuryAddressChanged(address treasury);
+    event StrategistAddressChanged(address strategist);
+    event MaxStakeAmountChanged(uint256 maxStakeAmount);
+
+    constructor(
+        IWUSD _wusd,
+        IERC20 _usdt,
+        IERC20 _wex,
+        IWswapRouter _wswapRouter,
+        address _treasury,
+        uint256 _maxStakeAmount
+    ) {
+        require(
+            address(_wusd) != address(0) &&
+                address(_usdt) != address(0) &&
+                address(_wex) != address(0) &&
+                address(_wswapRouter) != address(0) &&
+                _treasury != address(0),
+            "zero address in constructor"
+        );
+        wusd = _wusd;
+        usdt = _usdt;
+        wex = _wex;
+        wswapRouter = _wswapRouter;
+        treasury = _treasury;
+        swapPath = [address(usdt), address(wex)];
+        maxStakeAmount = _maxStakeAmount;
+    }
+
+    function setSwapPath(address[] calldata _swapPath) external onlyOwner {
+        swapPath = _swapPath;
+
+        emit SwapPathChanged(swapPath);
+    }
+
+    function setWexPermille(uint _wexPermille) external onlyOwner {
+        require(_wexPermille <= 500, "wexPermille too high!");
+        wexPermille = _wexPermille;
+
+        emit WexPermilleChanged(wexPermille);
+    }
+
+    function setTreasuryPermille(uint _treasuryPermille) external onlyOwner {
+        require(_treasuryPermille <= 50, "treasuryPermille too high!");
+        treasuryPermille = _treasuryPermille;
+
+        emit TreasuryPermilleChanged(treasuryPermille);
+    }
+
+    function setFeePermille(uint _feePermille) external onlyOwner {
+        require(_feePermille <= 20, "feePermille too high!");
+        feePermille = _feePermille;
+
+        emit FeePermilleChanged(feePermille);
+    }
+
+    function setTreasuryAddress(address _treasury) external onlyOwner {
+        treasury = _treasury;
+
+        emit TreasuryAddressChanged(treasury);
+    }
+
+    function setStrategistAddress(address _strategist) external onlyOwner {
+        strategist = _strategist;
+
+        emit StrategistAddressChanged(strategist);
+    }
+
+    function setMaxStakeAmount(uint256 _maxStakeAmount) external onlyOwner {
+        maxStakeAmount = _maxStakeAmount;
+
+        emit MaxStakeAmountChanged(maxStakeAmount);
+    }
+
+    function stake(uint256 amount) external nonReentrant {
+        require(amount <= maxStakeAmount, "amount too high");
+        usdt.safeTransferFrom(msg.sender, address(this), amount);
+        if (feePermille > 0) {
+            uint256 feeAmount = (amount * feePermille) / 1000;
+            usdt.safeTransfer(treasury, feeAmount);
+            amount = amount - feeAmount;
         }
-        uint256 _newAccumulatedRewardPerShare = accumulatedRewardPerShare +
-            ((block.timestamp - timeOfLastAllocation) * rewardRate * 1e18) /
-            totalStakeAmount;
-        uint256 _accumulatedReward = (_newAccumulatedRewardPerShare *
-            totalStakeAmount) /
-            1e18 -
-            totalRewardDebt;
-        if (_accumulatedReward >= stakingRewardsBalance) {
-            uint256 _newPendingRewards = stakingRewardsBalance -
-                ((accumulatedRewardPerShare * totalStakeAmount) /
-                    1e18 -
-                    totalRewardDebt);
-            _newAccumulatedRewardPerShare =
-                accumulatedRewardPerShare +
-                (_newPendingRewards * 1e18) /
-                totalStakeAmount;
-        }
-        return _newAccumulatedRewardPerShare;
+        uint256 wexAmount = (amount * wexPermille) / 1000;
+        usdt.approve(address(wswapRouter), wexAmount);
+        wswapRouter.swapExactTokensForTokensSupportingFeeOnTransferTokens(
+            wexAmount,
+            0,
+            swapPath,
+            address(this),
+            block.timestamp
+        );
+        wusd.mint(msg.sender, amount);
+
+        emit Stake(msg.sender, amount);
+    }
+
+    function redeem(uint256 amount) external nonReentrant {
+        uint256 usdtTransferAmount = (amount *
+            (1000 - wexPermille - treasuryPermille)) / 1000;
+        uint256 usdtTreasuryAmount = (amount * treasuryPermille) / 1000;
+        uint256 wexTransferAmount = (wex.balanceOf(address(this)) * amount) /
+            wusd.totalSupply();
+        wusd.burn(msg.sender, amount);
+        usdt.safeTransfer(treasury, usdtTreasuryAmount);
+        usdt.safeTransfer(msg.sender, usdtTransferAmount);
+        wex.safeTransfer(msg.sender, wexTransferAmount);
+
+        emit Redeem(msg.sender, amount);
+    }
+
+    function withdrawUsdt(uint256 amount) external onlyOwner {
+        require(strategist != address(0), "strategist not set");
+        usdt.safeTransfer(strategist, amount);
+
+        emit UsdtWithdrawn(amount);
+    }
+
+    function withdrawWex(uint256 amount) external onlyWithdrawer {
+        wex.safeTransfer(msg.sender, amount);
+
+        emit WexWithdrawn(amount);
     }
 }

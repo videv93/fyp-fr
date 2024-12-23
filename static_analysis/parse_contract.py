@@ -34,6 +34,10 @@ def analyze_contract(filepath: str):
         for func in contract.functions:
             # Extract basic function info
             func_name = func.name
+            # Exclude function if func_name == constructor
+            if func_name == "slitherConstructorVariables":
+                continue
+
             visibility = str(func.visibility)  # e.g. 'public', 'external', ...
             parameters = [(str(p.type), p.name) for p in func.parameters]
             returns = [(str(r.type), r.name) for r in func.returns]
@@ -45,7 +49,6 @@ def analyze_contract(filepath: str):
             # Get functions being called
             called_functions = [call.name for call in func.internal_calls if not isinstance(call, SolidityFunction)]
 
-            # Exclude functin if func_name == constructor
 
 
             # Prepare the function detail dict
