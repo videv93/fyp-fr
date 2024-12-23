@@ -27,29 +27,24 @@ class AgentCoordinator:
         vuln_results = self.analyzer.analyze(contract_info)
         vulnerabilities = vuln_results.get("vulnerabilities", [])
 
+
         if not vulnerabilities:
             return {"status": "no_vulnerability_found"}
 
+        # Sort the vulnerabilities by confidence score
+        vulnerabilities = sorted(vulnerabilities, key=lambda x: x.get("confidence_score", 0), reverse=True)
+
+        target_vuln = vulnerabilities[0]
+
         # 2. Exploiter plans exploit strategies for each vulnerability
-        exploit_plans = []
-        transactions = []
+        exploit_plan = self.exploiter.generate_exploit_plan(target_vuln)
 
-        # for vuln in vulnerabilities:
-        #     exploit_plan = self.exploiter.generate_exploit_plan(vuln)
-        #     exploit_plans.append({
-        #         "vulnerability_type": vuln.get("vulnerability_type"),
-        #         "exploit_plan": exploit_plan.get("exploit_plan", {})
-        #     })
-
-        #     # 3. Generator creates transaction sequence based on the exploit plan
-        #     tx_sequence = self.generator.generate(exploit_plan)
-        #     transactions.append({
-        #         "vulnerability_type": vuln.get("vulnerability_type"),
-        #         "transactions": tx_sequence
-        #     })
+        # 3. Generator creates transaction sequence based on the exploit plan
+        tx_sequence = self.generator.generate(exploit_plan)
 
         return {
             "vulnerabilities": vulnerabilities,
-            "exploit_plans": exploit_plans,
-            "transactions": transactions
+            "target_vuln": target_vuln,
+            "exploit_plan": exploit_plan['exploit_plan'],
+            "tx_sequence": tx_sequence
         }

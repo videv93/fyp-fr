@@ -1,6 +1,7 @@
 # main.py
 
 import os
+from llm_agents.agents import exploiter
 from static_analysis.parse_contract import analyze_contract
 from llm_agents.agent_coordinator import AgentCoordinator
 from rag.vectorstore import VulnerabilityKB
@@ -14,7 +15,7 @@ def main():
     kb = VulnerabilityKB()
 
     # 2. Analyze contract
-    filepath = "static_analysis/test_contracts/code.sol"
+    filepath = "static_analysis/test_contracts/sample.sol"
     function_details, call_graph, detector_results = analyze_contract(filepath)
 
     contract_info = {
@@ -55,35 +56,76 @@ def main():
     else:
         print("No vulnerabilities found.")
 
-    # Print Exploit Plans
-    print("\n==== EXPLOIT PLANS ====")
-    if results.get("exploit_plans"):
-        for idx, exploit in enumerate(results["exploit_plans"], start=1):
-            print(f"\nExploit Plan for Vulnerability {idx} ({exploit['vulnerability_type']}):")
-            print(f"  Setup Steps:")
-            for step in exploit['exploit_plan'].get("setup_steps", []):
-                print(f"    - {step}")
-            print(f"  Execution Steps:")
-            for step in exploit['exploit_plan'].get("execution_steps", []):
-                print(f"    - {step}")
-            print(f"  Validation Steps:")
-            for step in exploit['exploit_plan'].get("validation_steps", []):
-                print(f"    - {step}")
+    # Print Targeted Vulnerability
+    print("\n==== TARGETED VULNERABILITY ====")
+    target_vuln = results.get("target_vuln")
+    if target_vuln:
+        print(f"\nTargeted Vulnerability:")
+        print(f"  Type: {target_vuln.get('vulnerability_type', 'N/A')}")
+        print(f"  Confidence Score: {target_vuln.get('confidence_score', 'N/A')}")
+        print(f"  Reasoning: {target_vuln.get('reasoning', 'N/A')}")
+        print(f"  Affected Functions: {', '.join(target_vuln.get('affected_functions', []))}")
     else:
-        print("No exploit plans generated.")
+        print("No targeted vulnerability found.")
 
-    # Print Transaction Sequences
-    print("\n==== EXPLOIT TRANSACTIONS ====")
-    if results.get("transactions"):
-        for idx, tx in enumerate(results["transactions"], start=1):
-            print(f"\nTransaction Sequence for Vulnerability {idx} ({tx['vulnerability_type']}):")
-            for tx_detail in tx['transactions']:
-                print(f"  - From: {tx_detail.get('from', 'N/A')}")
-                print(f"    To: {tx_detail.get('to', 'N/A')}")
-                print(f"    Value: {tx_detail.get('value', 'N/A')}")
-                print(f"    Data: {tx_detail.get('data', 'N/A')}")
+    # Print Exploit Plan
+    print("\n==== EXPLOIT PLAN ====")
+    exploit_plan = results.get("exploit_plan")
+
+    if exploit_plan:
+        print(f"\nExploit Plan:")
+        print(f"  Setup Steps:")
+        for step in exploit_plan.get("setup_steps", []):
+            print(f"    - {step}")
+        print(f"  Execution Steps:")
+        for step in exploit_plan.get("execution_steps", []):
+            print(f"    - {step}")
+        print(f"  Validation Steps:")
+        for step in exploit_plan.get("validation_steps", []):
+            print(f"    - {step}")
     else:
-        print("No transaction sequences generated.")
+        print("No exploit plan generated.")
+
+    # print("\n==== EXPLOIT PLANS ====")
+    # if results.get("exploit_plans"):
+    #     for idx, exploit in enumerate(results["exploit_plans"], start=1):
+    #         print(f"\nExploit Plan for Vulnerability {idx} ({exploit['vulnerability_type']}):")
+    #         print(f"  Setup Steps:")
+    #         for step in exploit['exploit_plan'].get("setup_steps", []):
+    #             print(f"    - {step}")
+    #         print(f"  Execution Steps:")
+    #         for step in exploit['exploit_plan'].get("execution_steps", []):
+    #             print(f"    - {step}")
+    #         print(f"  Validation Steps:")
+    #         for step in exploit['exploit_plan'].get("validation_steps", []):
+    #             print(f"    - {step}")
+    # else:
+    #     print("No exploit plans generated.")
+
+    # Print Transaction Sequence
+    print("\n==== TRANSACTION SEQUENCE ====")
+    tx_sequence = results.get("tx_sequence")
+    if tx_sequence:
+        print(f"\nTransaction Sequence:")
+        for tx in tx_sequence:
+            print(f"  From: {tx.get('from', 'N/A')}")
+            print(f"  To: {tx.get('to', 'N/A')}")
+            print(f"  Value: {tx.get('value', 'N/A')}")
+            print(f"  Data: {tx.get('data', 'N/A')}")
+    else:
+        print("No transaction sequence generated.")
+
+    # print("\n==== EXPLOIT TRANSACTIONS ====")
+    # if results.get("transactions"):
+    #     for idx, tx in enumerate(results["transactions"], start=1):
+    #         print(f"\nTransaction Sequence for Vulnerability {idx} ({tx['vulnerability_type']}):")
+    #         for tx_detail in tx['transactions']:
+    #             print(f"  - From: {tx_detail.get('from', 'N/A')}")
+    #             print(f"    To: {tx_detail.get('to', 'N/A')}")
+    #             print(f"    Value: {tx_detail.get('value', 'N/A')}")
+    #             print(f"    Data: {tx_detail.get('data', 'N/A')}")
+    # else:
+    #     print("No transaction sequences generated.")
 
 if __name__ == "__main__":
     main()

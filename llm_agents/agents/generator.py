@@ -51,21 +51,21 @@ class GeneratorAgent:
             messages=[
                 {"role": "system", "content": """You are a smart contract exploit generator. Given an exploit plan, generate a sequence of transactions that can execute the exploit.
 
-Ensure the response is strictly in JSON format as follows:
+                                                Ensure the response is strictly in JSON format as follows:
 
-{
-    "transactions": [
-        {
-            "from": "0x...",
-            "to": "0x...",
-            "value": "0",
-            "data": "0x..."
-        },
-        ...
-    ]
-}
+                                                {
+                                                    "transactions": [
+                                                        {
+                                                            "from": "0x...",
+                                                            "to": "0x...",
+                                                            "value": "0",
+                                                            "data": "0x..."
+                                                        },
+                                                        ...
+                                                    ]
+                                                }
 
-Do not include any additional text outside of this JSON structure."""
+                                                Do not include any additional text outside of this JSON structure."""
                 },
                 {"role": "user", "content": prompt}
             ],
