@@ -1,117 +1,175 @@
-# rag/vectorstore.py
-
 import os
-from typing import List, Dict
+from typing import List, Dict, Optional
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.docstore.document import Document
 from .knowledge_base import VULNERABILITY_DOCS
+import json
 
 class VulnerabilityKB:
     def __init__(self):
-        # Initialize embeddings with OpenAI API
         self.embeddings = OpenAIEmbeddings(
             openai_api_key=os.getenv("OPENAI_API_KEY")
         )
 
-        # Text splitter for chunking docs
+        # Use a smaller chunk size to maintain coherence
         self.text_splitter = CharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=200
+            chunk_size=500,
+            chunk_overlap=100,
+            separator="\n"
         )
 
         # Create vector store
         self.vectorstore = self._initialize_vectorstore()
 
+    def _create_structured_document(self, vuln_doc) -> str:
+        """Create a structured representation of the vulnerability document"""
+        return f"""
+VULNERABILITY: {vuln_doc.name}
+-------------------
+DESCRIPTION:
+{vuln_doc.description}
+
+SCENARIO:
+{vuln_doc.scenario}
+
+PROPERTY:
+{vuln_doc.property}
+
+IMPACT:
+{vuln_doc.impact}
+
+CODE PATTERNS:
+{chr(10).join(vuln_doc.code_patterns)}
+
+PREVENTION:
+{chr(10).join(vuln_doc.prevention)}
+
+EXPLOIT:
+{json.dumps(vuln_doc.exploit_template, indent=2)}
+"""
+
     def _initialize_vectorstore(self):
         """Initialize FAISS vector store with vulnerability docs"""
-        # Convert vulnerability docs to text chunks
         docs = []
+
         for vuln_doc in VULNERABILITY_DOCS:
-            # Create document for each section
-            docs.extend([
-                Document(
-                    page_content=vuln_doc.description,
-                    metadata={"type": "description", "name": vuln_doc.name}
-                ),
-                Document(
-                    page_content=vuln_doc.scenario,
-                    metadata={"type": "scenario", "name": vuln_doc.name}
-                ),
-                Document(
-                    page_content="\n".join(vuln_doc.code_patterns),
-                    metadata={"type": "patterns", "name": vuln_doc.name}
-                ),
-                Document(
-                    page_content="\n".join(vuln_doc.prevention),
-                    metadata={"type": "prevention", "name": vuln_doc.name}
-                ),
-                Document(
-                    page_content=str(vuln_doc.exploit_template),
-                    metadata={"type": "exploit", "name": vuln_doc.name}
-                )
-            ])
+            # Create a complete structured document
+            full_doc = self._create_structured_document(vuln_doc)
 
-        # Split into chunks
-        chunks = self.text_splitter.split_documents(docs)
+            # Split the full document into chunks while preserving context
+            chunks = self.text_splitter.create_documents(
+                texts=[full_doc],
+                metadatas=[{
+                    "name": vuln_doc.name,
+                    "full_doc": full_doc,  # Store full document for context
+                    "description": vuln_doc.description,
+                    "impact": vuln_doc.impact,
+                    "exploit_template": json.dumps(vuln_doc.exploit_template)
+                }]
+            )
 
-        # Create vector store
-        return FAISS.from_documents(chunks, self.embeddings)
+            docs.extend(chunks)
 
-    def query_knowledge_base(self, query: str, k: int = 10) -> List[Document]:
+        return FAISS.from_documents(docs, self.embeddings)
+
+    def query_knowledge_base(
+        self,
+        query: str,
+        k: int = 5,
+        filter_type: Optional[str] = None
+    ) -> List[Dict]:
         """
-        Perform a similarity search on the Knowledge Base with an enhanced query.
+        Perform an enhanced similarity search on the Knowledge Base.
 
         Args:
-            query (str): The comprehensive query based on the entire contract.
-            k (int): Number of top relevant documents to retrieve.
+            query (str): The search query
+            k (int): Number of results to return
+            filter_type (str): Optional filter for vulnerability type
 
         Returns:
-            List[Document]: List of relevant documents from the KB.
+            List[Dict]: List of relevant vulnerability information
         """
-        # Add vulnerability pattern context to query
+        # Enhance query with context
         enhanced_query = f"""
-        Vulnerability context: {query}
-        Common patterns:
-        - State variable modifications
-        - External calls
-        - Access control mechanisms
-        - Control flow patterns
-        - Price calculations
-        - Token operations
+        Context: Looking for vulnerability information related to:
+        {query}
+
+        Consider:
+        - Vulnerability patterns and characteristics
+        - Potential impact and exploitation scenarios
+        - Prevention measures and best practices
+        - Related code patterns and implementations
         """
 
-        return self.vectorstore.similarity_search(enhanced_query, k=k)
+        # Perform similarity search
+        results = self.vectorstore.similarity_search_with_score(
+            enhanced_query,
+            k=k
+        )
 
-    def get_exploit_template(self, vuln_name: str) -> Dict[str, str]:
+        # Process and deduplicate results
+        processed_results = []
+        seen_vulns = set()
+
+        for doc, score in results:
+            vuln_name = doc.metadata["name"]
+
+            # Skip if we've already seen this vulnerability
+            if vuln_name in seen_vulns:
+                continue
+
+            seen_vulns.add(vuln_name)
+
+            # Return full context along with the matching chunk
+            processed_results.append({
+                "name": vuln_name,
+                "relevance_score": score,
+                "matching_chunk": doc.page_content,
+                "full_context": doc.metadata["full_doc"],
+                "description": doc.metadata["description"],
+                "impact": doc.metadata["impact"],
+                "exploit_template": json.loads(doc.metadata["exploit_template"])
+            })
+
+        return processed_results
+
+    def get_vulnerability_details(self, vuln_name: str) -> Optional[Dict]:
         """
-        Retrieve the exploit template for a specific vulnerability.
+        Get complete details for a specific vulnerability.
 
         Args:
-            vuln_name (str): The name of the vulnerability.
+            vuln_name (str): Name of the vulnerability
 
         Returns:
-            Dict[str, str]: The exploit template containing setup, execution, and validation steps.
+            Optional[Dict]: Complete vulnerability information
         """
-        for doc in VULNERABILITY_DOCS:
-            if doc.name.lower() == vuln_name.lower():
-                return doc.exploit_template
+        for vuln_doc in VULNERABILITY_DOCS:
+            if vuln_doc.name.lower() == vuln_name.lower():
+                return {
+                    "name": vuln_doc.name,
+                    "description": vuln_doc.description,
+                    "scenario": vuln_doc.scenario,
+                    "property": vuln_doc.property,
+                    "impact": vuln_doc.impact,
+                    "code_patterns": vuln_doc.code_patterns,
+                    "prevention": vuln_doc.prevention,
+                    "exploit_template": vuln_doc.exploit_template
+                }
         return None
 
 # Usage example
 if __name__ == "__main__":
     kb = VulnerabilityKB()
 
-    # Query for reentrancy patterns
+    # Search for reentrancy vulnerabilities
     results = kb.query_knowledge_base(
-        "What are code patterns indicating reentrancy?"
+        "Show me patterns related to reentrancy attacks in smart contracts"
     )
 
-    for doc in results:
-        print(f"Document type: {doc.metadata['type']}")
-        print(f"Content: {doc.page_content}\n")
-
-    # Get exploit template
-    template = kb.get_exploit_template("Reentrancy")
-    print("Exploit template:", template)
+    for result in results:
+        print(f"\nVulnerability: {result['name']}")
+        print(f"Relevance Score: {result['relevance_score']}")
+        print(f"Matching Content: {result['matching_chunk']}")
+        print("\nFull Context Available in result['full_context']")
