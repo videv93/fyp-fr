@@ -66,6 +66,8 @@ class AnalyzerAgent:
             - Visibility: {func['visibility']}
             - Parameters: {func['parameters']}
             - Returns: {func['returns']}
+            - Called Functions: {func['called_functions']}
+            - Content: {func['content']}
             """
             queries.append(func_query)
 
@@ -102,6 +104,8 @@ class AnalyzerAgent:
 Function: {func['function']}
 Visibility: {func['visibility']}
 Parameters: {func['parameters']}
+Called Functions: {func['called_functions']}
+Content: {func['content']}
 Returns: {func['returns']}
 ---
 """
@@ -138,7 +142,7 @@ Analyze the contract for these vulnerabilities considering:
         1. Vulnerability type and classification
         2. Confidence score (0-1)
         3. Detailed technical reasoning
-        4. Affected functions and components
+        4. Affected functions and components from the section titled "Contract Functions"
         5. Potential impact and exploitation scenarios
 
         Output in strict JSON format:

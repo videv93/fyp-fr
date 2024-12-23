@@ -11,8 +11,8 @@ contract ReentrancyVulnerable {
         balances[msg.sender] += msg.value;
     }
 
-    // Withdraw function contains a reentrancy vulnerability
-    function withdraw(uint256 _amount) external {
+    // banana function contains a reentrancy vulnerability
+    function banana(uint256 _amount) external {
         require(balances[msg.sender] >= _amount, "Insufficient balance");
 
         // Transfer Ether to the caller (external call before state update)

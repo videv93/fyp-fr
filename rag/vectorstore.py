@@ -77,7 +77,7 @@ EXPLOIT:
     def query_knowledge_base(
         self,
         query: str,
-        k: int = 5,
+        k: int = 3,
         filter_type: Optional[str] = None
     ) -> List[Dict]:
         """

@@ -40,7 +40,8 @@ class AgentCoordinator:
         exploit_plan = self.exploiter.generate_exploit_plan(target_vuln)
 
         # 3. Generator creates transaction sequence based on the exploit plan
-        tx_sequence = self.generator.generate(exploit_plan)
+        tx_sequence = {}
+        # tx_sequence = self.generator.generate(exploit_plan)
 
         return {
             "vulnerabilities": vulnerabilities,

@@ -15,7 +15,7 @@ def main():
     kb = VulnerabilityKB()
 
     # 2. Analyze contract
-    filepath = "static_analysis/test_contracts/sample.sol"
+    filepath = "static_analysis/test_contracts/reentrancy.sol"
     function_details, call_graph, detector_results = analyze_contract(filepath)
 
     contract_info = {
@@ -35,8 +35,10 @@ def main():
         print(f"Function: {f['function']}")
         print(f"Visibility: {f['visibility']}")
         print(f"Parameters: {f['parameters']}")
+        print(f"Called Functions: {f['called_functions']}")
         print(f"Returns: {f['returns']}")
         print(f"Lines: {f['start_line']} - {f['end_line']}\n")
+        print(f"Content: {f['content']}\n")
 
     # 3. Initialize coordinator with knowledge base
     coordinator = AgentCoordinator(kb)

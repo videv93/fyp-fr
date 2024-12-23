@@ -2,6 +2,7 @@ from slither import Slither
 from slither.core.declarations.function import Function
 from slither.core.declarations.contract import Contract
 from slither.printers.abstract_printer import AbstractPrinter
+from slither.solc_parsing.expressions.find_variable import SolidityFunction
 from .slither_detectors import DETECTORS
 from .call_graph_printer import PrinterCallGraphV2
 from typing import Dict, List
@@ -16,9 +17,10 @@ def analyze_contract(filepath: str):
     # Initialize Slither on the given file. This parses and compiles the contract.
     slither = Slither(filepath)
     printer = PrinterCallGraphV2(slither, None)
-    # for detector_class in all_detectors.DETECTORS:
+
     for detector_class in DETECTORS:
         slither.register_detector(detector_class)
+
     detectors_results = slither.run_detectors()
     cfg_data = printer.get_call_graph_content()
     all_function_details = []
@@ -37,9 +39,14 @@ def analyze_contract(filepath: str):
             returns = [(str(r.type), r.name) for r in func.returns]
 
             # Lines of code (start_line, end_line). Not all functions have source mappings, handle None carefully.
-            # source_mapping is typically a Slither object with multiple fields.
             start_line = func.source_mapping.start if func.source_mapping else None
             end_line = func.source_mapping.end if func.source_mapping else None
+
+            # Get functions being called
+            called_functions = [call.name for call in func.internal_calls if not isinstance(call, SolidityFunction)]
+
+            # Exclude functin if func_name == constructor
+
 
             # Prepare the function detail dict
             func_detail = {
@@ -49,12 +56,15 @@ def analyze_contract(filepath: str):
                 "parameters": parameters,
                 "returns": returns,
                 "start_line": start_line,
-                "end_line": end_line
+                "end_line": end_line,
+                "called_functions": called_functions,
+                "content": func.source_mapping.content if func.source_mapping else None
             }
+
             all_function_details.append(func_detail)
 
-
     return all_function_details, call_graph, detectors_results
+
 
 if __name__ == "__main__":
     # Example usage:
