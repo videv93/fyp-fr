@@ -1,51 +1,53 @@
-# llm_agents/agent_coordinator.py
+# ==============================
+# File: llm_agents/agent_coordinator.py
+# ==============================
+from typing import Dict
+# Import the new function
+from rag.doc_db import get_vuln_retriever_from_json
 
-from typing import Dict, List
 from .agents.analyzer import AnalyzerAgent
 from .agents.exploiter import ExploiterAgent
 from .agents.generator import GeneratorAgent
-from rag.vectorstore import VulnerabilityKB
 
 class AgentCoordinator:
-    def __init__(self, kb: VulnerabilityKB):
-        self.kb = kb
-        self.analyzer = AnalyzerAgent(kb)
-        self.exploiter = ExploiterAgent(kb)
-        self.generator = GeneratorAgent(kb)
+    def __init__(self):
+        # Build a retriever from the JSON-based dataset
+        # Suppose your dataset is "dataset/" and your JSON is "contract_vulns.json" in that directory.
+        self.vuln_retriever = get_vuln_retriever_from_json(
+            json_path="known_vulnerabilities/contract_vulns.json",
+            base_dataset_dir="known_vulnerabilities",
+            index_name="fyp",
+            top_k=3
+        )
+
+        self.analyzer = AnalyzerAgent(self.vuln_retriever)
+        self.exploiter = ExploiterAgent()
+        self.generator = GeneratorAgent()
 
     def analyze_contract(self, contract_info: Dict) -> Dict:
         """
-        Coordinates the analysis and exploit generation process for the entire contract.
-
-        Args:
-            contract_info (Dict): Contains 'function_details' and 'call_graph' of the contract.
-
-        Returns:
-            Dict: Contains vulnerabilities, exploit plans, and transaction sequences.
+        Coordinates the analysis & exploit generation process for the entire contract.
         """
-        # 1. Analyzer determines vulnerabilities
+        # 1. Analyzer => detect vulnerabilities
         vuln_results = self.analyzer.analyze(contract_info)
         vulnerabilities = vuln_results.get("vulnerabilities", [])
-
 
         if not vulnerabilities:
             return {"status": "no_vulnerability_found"}
 
-        # Sort the vulnerabilities by confidence score
-        vulnerabilities = sorted(vulnerabilities, key=lambda x: x.get("confidence_score", 0), reverse=True)
+        # 2. Sort vulnerabilities by confidence
+        vulnerabilities_sorted = sorted(vulnerabilities, key=lambda x: x.get("confidence_score", 0), reverse=True)
+        target_vuln = vulnerabilities_sorted[0]
 
-        target_vuln = vulnerabilities[0]
-
-        # 2. Exploiter plans exploit strategies for each vulnerability
+        # 3. Exploiter => plan exploit
         exploit_plan = self.exploiter.generate_exploit_plan(target_vuln)
 
-        # 3. Generator creates transaction sequence based on the exploit plan
-        tx_sequence = {}
-        # tx_sequence = self.generator.generate(exploit_plan)
+        # 4. Generator => produce transaction(s)
+        tx_sequence = self.generator.generate(exploit_plan)
 
         return {
-            "vulnerabilities": vulnerabilities,
+            "vulnerabilities": vulnerabilities_sorted,
             "target_vuln": target_vuln,
-            "exploit_plan": exploit_plan['exploit_plan'],
+            "exploit_plan": exploit_plan.get("exploit_plan"),
             "tx_sequence": tx_sequence
         }

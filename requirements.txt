@@ -6,3 +6,5 @@ slither-analyzer
 faiss-cpu
 jsonschema
 pyyaml
+pinecone-client
+unstructured

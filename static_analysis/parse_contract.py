@@ -39,6 +39,8 @@ def analyze_contract(filepath: str):
                 continue
 
             visibility = str(func.visibility)  # e.g. 'public', 'external', ...
+            if visibility == "internal":
+                continue
             parameters = [(str(p.type), p.name) for p in func.parameters]
             returns = [(str(r.type), r.name) for r in func.returns]
 

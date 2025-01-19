@@ -1,52 +1,127 @@
 /**
- *Submitted for verification at BscScan.com on 2022-09-30
+ *Submitted for verification at BscScan.com on 2022-12-09
  */
-
-// File: @openzeppelin/contracts/utils/Context.sol
-
-// OpenZeppelin Contracts v4.4.1 (utils/Context.sol)
 
 pragma solidity ^0.8.0;
 
-/**
- * @dev Provides information about the current execution context, including the
- * sender of the transaction and its data. While these are generally available
- * via msg.sender and msg.data, they should not be accessed in such a direct
- * manner, since when dealing with meta-transactions the account sending and
- * paying for execution may not be the actual sender (as far as an application
- * is concerned).
- *
- * This contract is only required for intermediate, library-like contracts.
- */
-abstract contract Context {
-    function _msgSender() internal view virtual returns (address) {
-        return msg.sender;
+interface IERC20 {
+    function totalSupply() external view returns (uint256);
+
+    function decimals() external view returns (uint8);
+
+    function symbol() external view returns (string memory);
+
+    function name() external view returns (string memory);
+
+    function getOwner() external view returns (address);
+
+    function balanceOf(address account) external view returns (uint256);
+
+    function transfer(
+        address recipient,
+        uint256 amount
+    ) external returns (bool);
+
+    function allowance(
+        address _owner,
+        address spender
+    ) external view returns (uint256);
+
+    function approve(address spender, uint256 amount) external returns (bool);
+
+    function transferFrom(
+        address sender,
+        address recipient,
+        uint256 amount
+    ) external returns (bool);
+
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(
+        address indexed owner,
+        address indexed spender,
+        uint256 value
+    );
+}
+
+contract Context {
+    constructor() {}
+
+    function _msgSender() internal view returns (address payable) {
+        return payable(msg.sender);
     }
 
-    function _msgData() internal view virtual returns (bytes calldata) {
+    function _msgData() internal view returns (bytes memory) {
+        this;
         return msg.data;
     }
 }
 
-// File: @openzeppelin/contracts/access/Ownable.sol
+library SafeMath {
+    function add(uint256 a, uint256 b) internal pure returns (uint256) {
+        uint256 c = a + b;
+        require(c >= a, "SafeMath: addition overflow");
 
-// OpenZeppelin Contracts (last updated v4.7.0) (access/Ownable.sol)
+        return c;
+    }
 
-pragma solidity ^0.8.0;
+    function sub(uint256 a, uint256 b) internal pure returns (uint256) {
+        return sub(a, b, "SafeMath: subtraction overflow");
+    }
 
-/**
- * @dev Contract module which provides a basic access control mechanism, where
- * there is an account (an owner) that can be granted exclusive access to
- * specific functions.
- *
- * By default, the owner account will be the one that deploys the contract. This
- * can later be changed with {transferOwnership}.
- *
- * This module is used through inheritance. It will make available the modifier
- * `onlyOwner`, which can be applied to your functions to restrict their use to
- * the owner.
- */
-abstract contract Ownable is Context {
+    function sub(
+        uint256 a,
+        uint256 b,
+        string memory errorMessage
+    ) internal pure returns (uint256) {
+        require(b <= a, errorMessage);
+        uint256 c = a - b;
+
+        return c;
+    }
+
+    function mul(uint256 a, uint256 b) internal pure returns (uint256) {
+        if (a == 0) {
+            return 0;
+        }
+
+        uint256 c = a * b;
+        require(c / a == b, "SafeMath: multiplication overflow");
+
+        return c;
+    }
+
+    function div(uint256 a, uint256 b) internal pure returns (uint256) {
+        return div(a, b, "SafeMath: division by zero");
+    }
+
+    function div(
+        uint256 a,
+        uint256 b,
+        string memory errorMessage
+    ) internal pure returns (uint256) {
+        // Solidity only automatically asserts when dividing by 0
+        require(b > 0, errorMessage);
+        uint256 c = a / b;
+        // assert(a == b * c + a % b); // There is no case in which this doesn't hold
+
+        return c;
+    }
+
+    function mod(uint256 a, uint256 b) internal pure returns (uint256) {
+        return mod(a, b, "SafeMath: modulo by zero");
+    }
+
+    function mod(
+        uint256 a,
+        uint256 b,
+        string memory errorMessage
+    ) internal pure returns (uint256) {
+        require(b != 0, errorMessage);
+        return a % b;
+    }
+}
+
+contract Ownable is Context {
     address private _owner;
 
     event OwnershipTransferred(
@@ -54,266 +129,756 @@ abstract contract Ownable is Context {
         address indexed newOwner
     );
 
-    /**
-     * @dev Initializes the contract setting the deployer as the initial owner.
-     */
     constructor() {
-        _transferOwnership(_msgSender());
+        address msgSender = _msgSender();
+        _owner = msgSender;
+        emit OwnershipTransferred(address(0), msgSender);
     }
 
-    /**
-     * @dev Throws if called by any account other than the owner.
-     */
-    modifier onlyOwner() {
-        _checkOwner();
-        _;
-    }
-
-    /**
-     * @dev Returns the address of the current owner.
-     */
-    function owner() public view virtual returns (address) {
+    function owner() public view returns (address) {
         return _owner;
     }
 
-    /**
-     * @dev Throws if the sender is not the owner.
-     */
-    function _checkOwner() internal view virtual {
-        require(owner() == _msgSender(), "Ownable: caller is not the owner");
+    modifier onlyOwner() {
+        require(_owner == _msgSender(), "Ownable: caller is not the owner");
+        _;
     }
 
-    /**
-     * @dev Leaves the contract without owner. It will not be possible to call
-     * `onlyOwner` functions anymore. Can only be called by the current owner.
-     *
-     * NOTE: Renouncing ownership will leave the contract without an owner,
-     * thereby removing any functionality that is only available to the owner.
-     */
-    function renounceOwnership() public virtual onlyOwner {
-        _transferOwnership(address(0));
+    function renounceOwnership() public onlyOwner {
+        emit OwnershipTransferred(_owner, address(0));
+        _owner = address(0);
     }
 
-    /**
-     * @dev Transfers ownership of the contract to a new account (`newOwner`).
-     * Can only be called by the current owner.
-     */
-    function transferOwnership(address newOwner) public virtual onlyOwner {
+    function transferOwnership(address newOwner) public onlyOwner {
+        _transferOwnership(newOwner);
+    }
+
+    function _transferOwnership(address newOwner) internal {
         require(
             newOwner != address(0),
             "Ownable: new owner is the zero address"
         );
-        _transferOwnership(newOwner);
-    }
-
-    /**
-     * @dev Transfers ownership of the contract to a new account (`newOwner`).
-     * Internal function without access restriction.
-     */
-    function _transferOwnership(address newOwner) internal virtual {
-        address oldOwner = _owner;
+        emit OwnershipTransferred(_owner, newOwner);
         _owner = newOwner;
-        emit OwnershipTransferred(oldOwner, newOwner);
     }
 }
 
-// File: contracts/House_Wallet.sol
+interface IPancakeFactory {
+    event PairCreated(
+        address indexed token0,
+        address indexed token1,
+        address pair,
+        uint256
+    );
 
-pragma solidity ^0.8.7;
+    function feeTo() external view returns (address);
 
-interface IRouletteMint {
-    function reward(address to, uint256 _mintAmount) external;
+    function feeToSetter() external view returns (address);
+
+    function getPair(
+        address tokenA,
+        address tokenB
+    ) external view returns (address pair);
+
+    function allPairs(uint256) external view returns (address pair);
+
+    function allPairsLength() external view returns (uint256);
+
+    function createPair(
+        address tokenA,
+        address tokenB
+    ) external returns (address pair);
+
+    function setFeeTo(address) external;
+
+    function setFeeToSetter(address) external;
 }
 
-interface IDysReward {
-    function Dysreward(address to, uint256 _mintAmount) external;
+interface IPancakeswapV2Router01 {
+    function factory() external pure returns (address);
+
+    function WETH() external pure returns (address);
+
+    function addLiquidity(
+        address tokenA,
+        address tokenB,
+        uint256 amountADesired,
+        uint256 amountBDesired,
+        uint256 amountAMin,
+        uint256 amountBMin,
+        address to,
+        uint256 deadline
+    ) external returns (uint256 amountA, uint256 amountB, uint256 liquidity);
+
+    function addLiquidityETH(
+        address token,
+        uint256 amountTokenDesired,
+        uint256 amountTokenMin,
+        uint256 amountETHMin,
+        address to,
+        uint256 deadline
+    )
+        external
+        payable
+        returns (uint256 amountToken, uint256 amountETH, uint256 liquidity);
+
+    function removeLiquidity(
+        address tokenA,
+        address tokenB,
+        uint256 liquidity,
+        uint256 amountAMin,
+        uint256 amountBMin,
+        address to,
+        uint256 deadline
+    ) external returns (uint256 amountA, uint256 amountB);
+
+    function removeLiquidityETH(
+        address token,
+        uint256 liquidity,
+        uint256 amountTokenMin,
+        uint256 amountETHMin,
+        address to,
+        uint256 deadline
+    ) external returns (uint256 amountToken, uint256 amountETH);
+
+    function removeLiquidityWithPermit(
+        address tokenA,
+        address tokenB,
+        uint256 liquidity,
+        uint256 amountAMin,
+        uint256 amountBMin,
+        address to,
+        uint256 deadline,
+        bool approveMax,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external returns (uint256 amountA, uint256 amountB);
+
+    function removeLiquidityETHWithPermit(
+        address token,
+        uint256 liquidity,
+        uint256 amountTokenMin,
+        uint256 amountETHMin,
+        address to,
+        uint256 deadline,
+        bool approveMax,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external returns (uint256 amountToken, uint256 amountETH);
+
+    function swapExactTokensForTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external returns (uint256[] memory amounts);
+
+    function swapTokensForExactTokens(
+        uint256 amountOut,
+        uint256 amountInMax,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external returns (uint256[] memory amounts);
+
+    function swapExactETHForTokens(
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external payable returns (uint256[] memory amounts);
+
+    function swapTokensForExactETH(
+        uint256 amountOut,
+        uint256 amountInMax,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external returns (uint256[] memory amounts);
+
+    function swapExactTokensForETH(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external returns (uint256[] memory amounts);
+
+    function swapETHForExactTokens(
+        uint256 amountOut,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external payable returns (uint256[] memory amounts);
+
+    function quote(
+        uint256 amountA,
+        uint256 reserveA,
+        uint256 reserveB
+    ) external pure returns (uint256 amountB);
+
+    function getAmountOut(
+        uint256 amountIn,
+        uint256 reserveIn,
+        uint256 reserveOut
+    ) external pure returns (uint256 amountOut);
+
+    function getAmountIn(
+        uint256 amountOut,
+        uint256 reserveIn,
+        uint256 reserveOut
+    ) external pure returns (uint256 amountIn);
+
+    function getAmountsOut(
+        uint256 amountIn,
+        address[] calldata path
+    ) external view returns (uint256[] memory amounts);
+
+    function getAmountsIn(
+        uint256 amountOut,
+        address[] calldata path
+    ) external view returns (uint256[] memory amounts);
 }
 
-contract House_Wallet is Ownable {
-    IRouletteMint public immutable thunderbrawlRoulette;
-    IDysReward public immutable dycNft;
+interface IPancakeswapV2Router02 is IPancakeswapV2Router01 {
+    function removeLiquidityETHSupportingFeeOnTransferTokens(
+        address token,
+        uint256 liquidity,
+        uint256 amountTokenMin,
+        uint256 amountETHMin,
+        address to,
+        uint256 deadline
+    ) external returns (uint256 amountETH);
 
-    mapping(uint256 => mapping(address => uint256)) public winners;
+    function removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(
+        address token,
+        uint256 liquidity,
+        uint256 amountTokenMin,
+        uint256 amountETHMin,
+        address to,
+        uint256 deadline,
+        bool approveMax,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external returns (uint256 amountETH);
 
-    address[] public fakeUsers;
+    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external;
 
-    event rewardResult(bool rewardStatus);
+    function swapExactETHForTokensSupportingFeeOnTransferTokens(
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external payable;
 
-    uint256 playerFee;
-    uint256 holderFee;
-    uint256 liquidityFee;
-    uint256 ownerFee;
+    function swapExactTokensForETHSupportingFeeOnTransferTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external;
+}
 
-    address public Fee_Wallet = 0x3c4D5ff28ff73f0f9235BB96e527Bc527f96242d;
-    address public Liqudity_Address =
-        0xF051E24f6875d882DBa2eBaac5fAcACb56D87b7a;
-    address public THB_NFT_Address = 0x72e901F1bb2BfA2339326DfB90c5cEc911e2ba3C;
-    address public DYC_NFT_Address = 0xc2E4F4d6e269F3A82E9A0B432526a53F98Fa5f40;
+interface IUniswapV2Router01 {
+    function factory() external pure returns (address);
 
-    uint256 randomNumber = 0;
-    bytes32 hashValue =
-        0x4061e8ae4207343a0e11b687633f43176cf1ef6309011db9b4a435bb7678c651;
-    bytes32 hashValueTwo =
-        0x52ed2f0b7486dfed2ec4abef928f81bc612c7564373fe2b9d42e74ff21d18265;
+    function WETH() external pure returns (address);
 
-    bool public rewardStatus = false;
-    bool winStatus = false;
-    bool public gameMode = false;
-    bool public dangerMode = false;
+    function addLiquidity(
+        address tokenA,
+        address tokenB,
+        uint256 amountADesired,
+        uint256 amountBDesired,
+        uint256 amountAMin,
+        uint256 amountBMin,
+        address to,
+        uint256 deadline
+    ) external returns (uint256 amountA, uint256 amountB, uint256 liquidity);
 
-    receive() external payable {}
+    function addLiquidityETH(
+        address token,
+        uint256 amountTokenDesired,
+        uint256 amountTokenMin,
+        uint256 amountETHMin,
+        address to,
+        uint256 deadline
+    )
+        external
+        payable
+        returns (uint256 amountToken, uint256 amountETH, uint256 liquidity);
 
-    constructor() {
-        thunderbrawlRoulette = IRouletteMint(THB_NFT_Address);
-        dycNft = IDysReward(DYC_NFT_Address);
+    function removeLiquidity(
+        address tokenA,
+        address tokenB,
+        uint256 liquidity,
+        uint256 amountAMin,
+        uint256 amountBMin,
+        address to,
+        uint256 deadline
+    ) external returns (uint256 amountA, uint256 amountB);
+
+    function removeLiquidityETH(
+        address token,
+        uint256 liquidity,
+        uint256 amountTokenMin,
+        uint256 amountETHMin,
+        address to,
+        uint256 deadline
+    ) external returns (uint256 amountToken, uint256 amountETH);
+
+    function removeLiquidityWithPermit(
+        address tokenA,
+        address tokenB,
+        uint256 liquidity,
+        uint256 amountAMin,
+        uint256 amountBMin,
+        address to,
+        uint256 deadline,
+        bool approveMax,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external returns (uint256 amountA, uint256 amountB);
+
+    function removeLiquidityETHWithPermit(
+        address token,
+        uint256 liquidity,
+        uint256 amountTokenMin,
+        uint256 amountETHMin,
+        address to,
+        uint256 deadline,
+        bool approveMax,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external returns (uint256 amountToken, uint256 amountETH);
+
+    function swapExactTokensForTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external returns (uint256[] memory amounts);
+
+    function swapTokensForExactTokens(
+        uint256 amountOut,
+        uint256 amountInMax,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external returns (uint256[] memory amounts);
+
+    function swapExactETHForTokens(
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external payable returns (uint256[] memory amounts);
+
+    function swapTokensForExactETH(
+        uint256 amountOut,
+        uint256 amountInMax,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external returns (uint256[] memory amounts);
+
+    function swapExactTokensForETH(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external returns (uint256[] memory amounts);
+
+    function swapETHForExactTokens(
+        uint256 amountOut,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external payable returns (uint256[] memory amounts);
+
+    function quote(
+        uint256 amountA,
+        uint256 reserveA,
+        uint256 reserveB
+    ) external pure returns (uint256 amountB);
+
+    function getAmountOut(
+        uint256 amountIn,
+        uint256 reserveIn,
+        uint256 reserveOut
+    ) external pure returns (uint256 amountOut);
+
+    function getAmountIn(
+        uint256 amountOut,
+        uint256 reserveIn,
+        uint256 reserveOut
+    ) external pure returns (uint256 amountIn);
+
+    function getAmountsOut(
+        uint256 amountIn,
+        address[] calldata path
+    ) external view returns (uint256[] memory amounts);
+
+    function getAmountsIn(
+        uint256 amountOut,
+        address[] calldata path
+    ) external view returns (uint256[] memory amounts);
+}
+
+interface IUniswapV2Router02 is IUniswapV2Router01 {
+    function removeLiquidityETHSupportingFeeOnTransferTokens(
+        address token,
+        uint256 liquidity,
+        uint256 amountTokenMin,
+        uint256 amountETHMin,
+        address to,
+        uint256 deadline
+    ) external returns (uint256 amountETH);
+
+    function removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(
+        address token,
+        uint256 liquidity,
+        uint256 amountTokenMin,
+        uint256 amountETHMin,
+        address to,
+        uint256 deadline,
+        bool approveMax,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external returns (uint256 amountETH);
+
+    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external;
+
+    function swapExactETHForTokensSupportingFeeOnTransferTokens(
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external payable;
+
+    function swapExactTokensForETHSupportingFeeOnTransferTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external;
+}
+
+struct Terms {
+    uint256 minimumPrice; // vs principle value
+    uint256 maxPayout; // in thousandths of a %. i.e. 500 = 0.5%
+    uint32 vestingTerm; // in seconds
+}
+
+interface IBond {
+    function terms() external returns (Terms memory);
+}
+
+interface IUniswapV2Pair {
+    function getReserves()
+        external
+        view
+        returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
+}
+
+contract DFS is Context, IERC20, Ownable {
+    using SafeMath for uint256;
+
+    mapping(address => mapping(address => uint256)) private _allowances;
+
+    mapping(address => uint256) private _balance;
+
+    mapping(address => uint256) private _tOwned;
+
+    mapping(address => bool) public exclusiveFromFee;
+
+    mapping(address => bool) public includeMinter;
+
+    uint256 private constant MAX = ~uint256(0);
+    uint256 private _totalSupply;
+    uint256 private _tFeeTotal;
+    uint8 public _decimals;
+    string public _symbol;
+    string public _name;
+
+    address[] public holders;
+    mapping(address => uint256) holdersIndex;
+    mapping(address => bool) includeHolders;
+    address public destroyAddress = 0xc4DE46a5C8fc7f57F07E232b465243A3Da3692f0;
+    IBond public bond;
+    IERC20 public usdt;
+
+    uint256 public _liquidityFee = 1;
+    uint256 private _previousLiquidityFee = _liquidityFee;
+
+    address _tokenOwner;
+    IUniswapV2Router02 public uniswapV2Router;
+    IUniswapV2Pair public pair;
+    bool public swapping;
+    bool public swapAndLiquifyEnabled = true;
+    bool public takeFee = true;
+    address public multiSignAddress;
+    address public fundAddress;
+    address public DAO;
+    address[] public mintlist;
+    uint256 public initialSupply = 5000 ether;
+
+    constructor(address _usdt, address _multiSignAddress) {
+        _name = "DFS";
+        _symbol = "DFS";
+        _decimals = 18;
+        _totalSupply = initialSupply;
+        _balance[_msgSender()] = _totalSupply;
+        usdt = IERC20(_usdt);
+        multiSignAddress = _multiSignAddress;
+        exclusiveFromFee[_msgSender()] = true;
+        exclusiveFromFee[address(this)] = true;
+        emit Transfer(address(0), msg.sender, _totalSupply);
     }
 
-    function shoot(
-        uint256 random,
-        uint256 gameId,
-        bool feestate,
-        uint256 _x,
-        string memory name,
-        address _add,
-        bool nftcheck,
-        bool dystopianCheck
-    ) external payable {
-        require(gameMode);
-
-        if (0.32 * 10 ** 18 >= msg.value && 0.006 * 10 ** 18 <= msg.value) {
-            playerFee = ((msg.value * 38) / 1038);
-            holderFee = ((playerFee * 25) / 1000);
-            liquidityFee = ((playerFee * 1) / 1000);
-            ownerFee = ((playerFee * 125) / 100000);
-
-            bool checkWinstatus = guessWin(_x, name, _add);
-
-            if (checkWinstatus == true) {
-                winners[gameId][msg.sender] = (msg.value - playerFee);
-                winStatus = true;
+    function setExclusiveFromFee(address[] memory _exclusive) public onlyOwner {
+        for (uint256 i = 0; i < _exclusive.length; i++) {
+            if (!exclusiveFromFee[_exclusive[i]]) {
+                exclusiveFromFee[_exclusive[i]] = true;
             }
+        }
+    }
 
-            if (feestate == true) {
-                payable(Fee_Wallet).transfer(holderFee);
-                payable(Liqudity_Address).transfer(liquidityFee);
-                payable(owner()).transfer(ownerFee);
-            }
+    function setPair(address _pair) public onlyOwner {
+        pair = IUniswapV2Pair(_pair);
+    }
 
-            randomNumber =
-                uint256(
-                    keccak256(
-                        abi.encodePacked(
-                            msg.sender,
-                            block.timestamp,
-                            randomNumber
-                        )
-                    )
-                ) %
-                10;
-            if (winStatus == true) {
-                if (nftcheck == true && randomNumber == random) {
-                    rewardStatus = true;
-                }
-                winStatus = false;
-            } else {
-                if (dystopianCheck == true && randomNumber == random) {
-                    rewardStatus = true;
-                }
+    function setMultiSignAddress(address _address) public onlyOwner {
+        multiSignAddress = _address;
+    }
+
+    function setBondAddress(address _bond) public onlyOwner {
+        bond = IBond(_bond);
+        exclusiveFromFee[address(bond)] = true;
+    }
+
+    function getHolders() external view returns (address[] memory) {
+        return holders;
+    }
+
+    function getHoldersLength() external view returns (uint256) {
+        return holders.length;
+    }
+
+    function getOwner() external view returns (address) {
+        return owner();
+    }
+
+    function decimals() external view returns (uint8) {
+        return _decimals;
+    }
+
+    function symbol() external view returns (string memory) {
+        return _symbol;
+    }
+
+    function name() external view returns (string memory) {
+        return _name;
+    }
+
+    function totalSupply() external view returns (uint256) {
+        return _totalSupply;
+    }
+
+    function balanceOf(address account) public view override returns (uint256) {
+        return _balance[account];
+    }
+
+    function transfer(
+        address recipient,
+        uint256 amount
+    ) external returns (bool) {
+        _transfer(_msgSender(), recipient, amount);
+        return true;
+    }
+
+    function allowance(
+        address owner,
+        address spender
+    ) external view returns (uint256) {
+        return _allowances[owner][spender];
+    }
+
+    function approve(address spender, uint256 amount) public returns (bool) {
+        _approve(_msgSender(), spender, amount);
+        return true;
+    }
+
+    function transferFrom(
+        address sender,
+        address recipient,
+        uint256 amount
+    ) public returns (bool) {
+        _transfer(sender, recipient, amount);
+        _approve(
+            sender,
+            _msgSender(),
+            _allowances[sender][_msgSender()].sub(
+                amount,
+                "BEP20: transfer amount exceeds allowance"
+            )
+        );
+        return true;
+    }
+
+    function increaseAllowance(
+        address spender,
+        uint256 addedValue
+    ) public returns (bool) {
+        _approve(
+            _msgSender(),
+            spender,
+            _allowances[_msgSender()][spender].add(addedValue)
+        );
+        return true;
+    }
+
+    function decreaseAllowance(
+        address spender,
+        uint256 subtractedValue
+    ) public returns (bool) {
+        _approve(
+            _msgSender(),
+            spender,
+            _allowances[_msgSender()][spender].sub(
+                subtractedValue,
+                "BEP20: decreased allowance below zero"
+            )
+        );
+        return true;
+    }
+
+    function burn(uint256 amount) public returns (bool) {
+        _burn(_msgSender(), amount);
+        return true;
+    }
+
+    function _tokenTransfer(
+        address sender,
+        address recipient,
+        uint256 amount
+    ) private {}
+
+    function isContract(address account) public view returns (bool) {
+        uint256 size;
+        // solhint-disable-next-line no-inline-assembly
+        assembly {
+            size := extcodesize(account)
+        }
+        return size > 0;
+    }
+
+    function _transfer(address from, address to, uint256 amount) internal {
+        require(from != address(0), "ERC20: transfer from the zero address");
+        require(amount > 0, "Transfer amount must be greater than zero");
+        if (from == address(this) || to == address(this)) {
+            return;
+        }
+        uint256 rate = 5;
+        uint256 fee = 0;
+        if (to == address(pair) || from == address(pair)) {
+            if (takeFee && !exclusiveFromFee[from]) {
+                fee = amount.mul(rate).div(1000);
+                _balance[from] = _balance[from].sub(amount).sub(fee);
+                _balance[destroyAddress] = _balance[destroyAddress].add(fee);
+                emit Transfer(from, destroyAddress, fee);
             }
         } else {
-            fakeUsers.push(msg.sender);
-            gameMode = false;
-            dangerMode = true;
+            _balance[from] = _balance[from].sub(amount);
         }
+        if (_balance[from] == 0 && holders.length != 0) {
+            holders[holdersIndex[from]] = holders[holders.length - 1];
+            holdersIndex[holders[holders.length - 1]] = holdersIndex[from];
+            holders.pop();
+            includeHolders[from] = false;
+        }
+        _balance[to] = _balance[to].add(amount);
+        if (!includeHolders[to]) {
+            holdersIndex[to] = holders.length;
+            holders.push(to);
+            includeHolders[to] = true;
+        }
+        emit Transfer(from, to, amount);
     }
 
-    function guess(
-        uint256 _x,
-        string memory name,
-        address _add
-    ) public view returns (bool) {
-        return sha256(abi.encode(_x, name, _add)) == hashValue;
-    }
-
-    function guessWin(
-        uint256 _x,
-        string memory name,
-        address _add
-    ) public view returns (bool) {
-        return sha256(abi.encode(_x, name, _add)) == hashValueTwo;
-    }
-
-    function sendReward() public {
-        thunderbrawlRoulette.reward(msg.sender, 1);
-    }
-
-    function sendRewardDys() public {
-        dycNft.Dysreward(msg.sender, 1);
-    }
-
-    function claimReward(
-        uint256 _ID,
-        address payable _player,
-        uint256 _amount,
-        bool _rewardStatus,
-        uint256 _x,
-        string memory name,
-        address _add
-    ) external {
-        require(gameMode);
-        bool checkValidity = guess(_x, name, _add);
-
-        if (checkValidity == true) {
-            if (winners[_ID][_player] == _amount) {
-                _player.transfer(_amount * 2);
-                if (_rewardStatus == true) {
-                    sendReward();
-                }
-                delete winners[_ID][_player];
-            } else {
-                if (_rewardStatus == true) {
-                    sendRewardDys();
-                }
+    function setMintlist(address[] memory _list) public onlyOwner {
+        for (uint256 i = 0; i < _list.length; ++i) {
+            if (!includeMinter[_list[i]]) {
+                mintlist.push(_list[i]);
+                includeMinter[_list[i]] = true;
             }
-            rewardStatus = false;
         }
     }
 
-    function withdrawEther(uint256 amount) external payable onlyOwner {
-        require(
-            address(this).balance >= amount,
-            "Error, contract has insufficent balance"
+    function mint(uint256 amount) public returns (bool) {
+        require(includeMinter[msg.sender], "Not in mint list");
+        _mint(_msgSender(), amount);
+        return true;
+    }
+
+    function _mint(address account, uint256 amount) internal {
+        require(account != address(0), "BEP20: mint to the zero address");
+
+        _totalSupply = _totalSupply.add(amount);
+        _balance[account] = _balance[account].add(amount);
+        emit Transfer(address(0), account, amount);
+    }
+
+    function _burn(address account, uint256 amount) internal {
+        require(account != address(0), "BEP20: burn from the zero address");
+
+        _balance[account] = _balance[account].sub(
+            amount,
+            "BEP20: burn amount exceeds balance"
         );
-        payable(owner()).transfer(amount);
+        _totalSupply = _totalSupply.sub(amount);
+        emit Transfer(account, address(0), amount);
     }
 
-    function setGameMode() external onlyOwner {
-        gameMode = !gameMode;
-        dangerMode = false;
+    function _approve(address owner, address spender, uint256 amount) internal {
+        require(owner != address(0), "BEP20: approve from the zero address");
+        require(spender != address(0), "BEP20: approve to the zero address");
+
+        _allowances[owner][spender] = amount;
+        emit Approval(owner, spender, amount);
     }
 
-    function setFeeWallet(address _feeWallet) external onlyOwner {
-        Fee_Wallet = _feeWallet;
-    }
-
-    function setFeeLpWallet(address _lpWallet) external onlyOwner {
-        Liqudity_Address = _lpWallet;
-    }
-
-    function setNftAddress(address _nftAddress) external onlyOwner {
-        THB_NFT_Address = _nftAddress;
-    }
-
-    function setDcyRewardAddress(address _dystopianAddress) external onlyOwner {
-        DYC_NFT_Address = _dystopianAddress;
-    }
-
-    function isFakeUser(address _user) public view returns (bool) {
-        for (uint256 i = 0; i < fakeUsers.length; i++) {
-            if (fakeUsers[i] == _user) {
-                return true;
-            }
-        }
-        return false;
+    function _burnFrom(address account, uint256 amount) internal {
+        _burn(account, amount);
+        _approve(
+            account,
+            _msgSender(),
+            _allowances[account][_msgSender()].sub(
+                amount,
+                "BEP20: burn amount exceeds allowance"
+            )
+        );
     }
 }

@@ -6,7 +6,6 @@ import os
 import json
 import re
 from jsonschema import validate, ValidationError
-from rag.vectorstore import VulnerabilityKB
 
 # Define JSON schema for transaction sequences
 TRANSACTION_SCHEMA = {
@@ -30,8 +29,7 @@ TRANSACTION_SCHEMA = {
 }
 
 class GeneratorAgent:
-    def __init__(self, kb: VulnerabilityKB):
-        self.kb = kb
+    def __init__(self):
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     def generate(self, exploit_plan: Dict) -> List[Dict]:
@@ -44,7 +42,5 @@ class GeneratorAgent:
         Returns:
             List[Dict]: A list of transaction details.
         """
-
-        # Return a Placeholder
 
         return []
