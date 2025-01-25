@@ -6,7 +6,7 @@ This project utilises a multi-agent workflow to identify vulnerabilities and gen
 
 - **Static Analysis**: Utilizes Slither to parse and analyze Solidity contracts, extracting function details and generating call graphs.
 - **Knowledge Base**: Stores vulnerability information using FAISS for efficient similarity searches, enabling contextual analysis.
-- **LLM Integration**: Employs OpenAI's GPT-3.5-turbo to analyze detected vulnerabilities and propose exploit strategies.
+- **LLM Integration**: Employs OpenAI's GPT Models to analyze detected vulnerabilities and propose exploit strategies.
 - **Agent Coordination**: Coordinates between analysis agents to provide comprehensive vulnerability assessments and exploit recommendations.
 
 ## Architecture
@@ -20,20 +20,23 @@ The project is divided into two main components:
 graph TB
     subgraph Main Application
         main[main.py]
+        static[Static Analysis]
     end
 
     subgraph RAG System
         doc_db[doc_db.py]
         pinecone[(Pinecone DB)]
+        vuln_json[vulnerability_categories.json]
         doc_db --> pinecone
+        doc_db --> vuln_json
     end
 
     subgraph LLM Agents
-        coordinator[agent_coordinator.py]
+        coordinator[AgentCoordinator]
         subgraph Agents
-            analyzer[analyzer.py]
-            exploiter[exploiter.py]
-            generator[generator.py]
+            analyzer[AnalyzerAgent]
+            exploiter[ExploiterAgent]
+            generator[GeneratorAgent]
         end
 
         coordinator --> analyzer
@@ -43,35 +46,29 @@ graph TB
 
     %% External Dependencies
     openai[OpenAI API]
+    slither[Slither Analyzer]
 
-    %% Main Flow
-    main --> coordinator
-
-    %% RAG Flow
-    doc_db -- Vulnerability Retriever --> coordinator
-    coordinator -- Query --> doc_db
-
-    %% Agent Flow
+    %% Data Flow
+    main --> static
+    static -->|Contract Info| coordinator
+    static -->|Call Graph| coordinator
+    static -->|Slither Results| coordinator
+    
+    doc_db -->|Vulnerability Retriever| analyzer
+    vuln_json -->|Category Definitions| analyzer
+    
+    analyzer -->|Vulnerabilities| exploiter
+    exploiter -->|Exploit Plan| generator
+    generator -->|Tx Sequence| main
+    
+    %% Component Interactions
     analyzer --> openai
     exploiter --> openai
     generator --> openai
+    static --> slither
 
-    %% Data Flow
-    main -- Contract Info --> coordinator
-    analyzer -- Vulnerabilities --> exploiter
-    exploiter -- Exploit Plans --> generator
-    generator -- Transaction Sequence --> coordinator
-
-    %% Agent Communication
-    coordinator -- Contract + Similar Vulns --> analyzer
-    analyzer -- Vulnerability Analysis --> coordinator
-    coordinator -- Vulnerability Info --> exploiter
-    exploiter -- Exploit Plan --> coordinator
-    coordinator -- Exploit Plan --> generator
-    generator -- Transactions --> coordinator
-
-    class main,coordinator,analyzer,exploiter,generator component
-    class openai external
+    class main,static,coordinator,analyzer,exploiter,generator component
+    class openai,slither external
     class pinecone database
 ```
 
