@@ -24,6 +24,7 @@ class AnalyzerAgent:
         """
         try:
             # 1) Build query for Pinecone
+            print("QUERYING PINECONE")
             query_text = self._build_query_text(contract_info)
             relevant_docs = self.retriever.get_relevant_documents(query_text)
 
@@ -37,6 +38,7 @@ class AnalyzerAgent:
             print("PROMPT: ", user_prompt)
 
             # 3) Call LLM with system + user messages
+            print("CALLING LLM")
             response_text = self._call_llm(system_prompt, user_prompt)
             logger.info(f"Raw LLM response:\n{response_text}")
 

@@ -153,27 +153,33 @@ def build_pinecone_vectorstore_from_json(
     1) Parse the JSON describing vulnerabilities
     2) For each contract, read its .sol file from disk
     3) Chunk it + attach vulnerability metadata
-    4) Build (or update) the Pinecone index with these Documents
+    4) Build the Pinecone index with these Documents (only if the index is empty)
     5) Return the VectorStore
     """
     # Ensure Pinecone index is set up
     init_pinecone_index(index_name=index_name)
 
+    # Initialize Pinecone client
+    pc = pinecone.Pinecone(
+        api_key=os.getenv("PINECONE_API_KEY"),
+        environment=os.getenv("PINECONE_ENV")
+    )
+    index = pc.Index(index_name)
+
+    # Check if the index is empty
+    index_stats = index.describe_index_stats()
+    if index_stats["total_vector_count"] > 0:
+        print("Index already contains data. Skipping document upload.")
+        return Pinecone.from_existing_index(
+            index_name=index_name,
+            embedding=OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
+        )
+
+    # If the index is empty, proceed with document upload
     vuln_data = load_json_vulns(json_path)
     all_docs = []
 
     for cdata in vuln_data:
-        # e.g. {
-        #   "name": "FibonacciBalance.sol",
-        #   "path": "dataset/access_control/FibonacciBalance.sol",
-        #   "pragma": "0.4.22",
-        #   "source": "...",
-        #   "vulnerabilities": [
-        #       {"lines": [31], "category": "access_control"},
-        #       {"lines": [38], "category": "access_control"}
-        #   ]
-        # }
-
         full_path = os.path.join(base_dataset_dir, cdata["path"])
         if not os.path.isfile(full_path):
             print(f"Warning: File not found: {full_path}. Skipping.")
@@ -206,7 +212,7 @@ def build_pinecone_vectorstore_from_json(
     # Create embeddings
     embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
 
-    # Create or update the Pinecone index
+    # Upload documents to the index
     vectorstore = Pinecone.from_documents(
         all_docs,
         embeddings,
