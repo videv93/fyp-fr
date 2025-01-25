@@ -36,9 +36,9 @@ class AnalyzerAgent:
             # 1) Build query for Pinecone
             print("QUERYING Pinecone")
             query_text = self._build_query_text(contract_info)
-            relevant_docs = self.retriever.invoke(query_text)
+            relevant_docs = self.retriever.invoke(contract_info["source_code"])
             print("Found", len(relevant_docs), "relevant snippets")
-
+            # print(relevant_docs)
             # 2) Build the user + system messages
             system_prompt = (
                 "You are an expert smart contract security auditor. "
@@ -90,11 +90,13 @@ class AnalyzerAgent:
             meta = doc.metadata
             lines_range = f"{meta.get('start_line')} - {meta.get('end_line')}"
             cats = meta.get("vuln_categories", [])
-            if not cats:
-                continue
+            # if not cats:
+            #     continue
             snippet_text += f"[Snippet] {meta.get('filename','Unknown')} lines {lines_range} cats={cats}\n"
             snippet_text += doc.page_content[:1500]  # truncated to 1500 chars
             snippet_text += "\n\n"
+
+        print("Snippet text:", snippet_text)
 
         # Category guidance section
         category_guidance = "\n=== VULNERABILITY CATEGORY GUIDANCE ===\n"
