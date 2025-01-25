@@ -22,22 +22,10 @@ graph TB
         main[main.py]
     end
 
-    subgraph Static Analysis
-        parser[parse_contract.py]
-        callgraph[call_graph_printer.py]
-        detectors[slither_detectors.py]
-
-        parser --> callgraph
-        parser --> detectors
-    end
-
-    subgraph Knowledge Base
-        kb[knowledge_base.py]
-        vectorstore[vectorstore.py]
-        rules[(YAML Rules)]
-
-        kb --> vectorstore
-        rules --> kb
+    subgraph RAG System
+        doc_db[doc_db.py]
+        pinecone[(Pinecone DB)]
+        doc_db --> pinecone
     end
 
     subgraph LLM Agents
@@ -55,34 +43,36 @@ graph TB
 
     %% External Dependencies
     openai[OpenAI API]
-    slither[Slither]
-    faiss[FAISS Vector Store]
 
     %% Main Flow
-    main --> parser
     main --> coordinator
 
-    %% Static Analysis Flow
-    parser --> slither
-
-    %% Knowledge Base Flow
-    vectorstore --> faiss
+    %% RAG Flow
+    doc_db -- Vulnerability Retriever --> coordinator
+    coordinator -- Query --> doc_db
 
     %% Agent Flow
     analyzer --> openai
-    analyzer --> vectorstore
     exploiter --> openai
     generator --> openai
 
     %% Data Flow
-    parser -- Contract Info --> coordinator
-    kb -- Vulnerability Patterns --> analyzer
+    main -- Contract Info --> coordinator
     analyzer -- Vulnerabilities --> exploiter
     exploiter -- Exploit Plans --> generator
+    generator -- Transaction Sequence --> coordinator
+
+    %% Agent Communication
+    coordinator -- Contract + Similar Vulns --> analyzer
+    analyzer -- Vulnerability Analysis --> coordinator
+    coordinator -- Vulnerability Info --> exploiter
+    exploiter -- Exploit Plan --> coordinator
+    coordinator -- Exploit Plan --> generator
+    generator -- Transactions --> coordinator
 
     class main,coordinator,analyzer,exploiter,generator component
-    class openai,slither,faiss external
-    class rules storage
+    class openai external
+    class pinecone database
 ```
 
 ## Prerequisites

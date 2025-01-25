@@ -1,238 +1,203 @@
+# ==============================
+# File: llm_agents/agents/analyzer.py
+# ==============================
 from typing import Dict, List
-from openai import OpenAI
-import os
-from rag.vectorstore import VulnerabilityKB
+from pathlib import Path
 import json
 import logging
+import os
+
+from openai import OpenAI
+from langchain.schema import Document
 
 logger = logging.getLogger(__name__)
 
 class AnalyzerAgent:
-    def __init__(self, kb: VulnerabilityKB):
-        self.kb = kb
+    def __init__(self, retriever, model_name="gpt-4o"):
+        self.retriever = retriever
+        self.model_name = model_name
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        # Load vulnerability categories
+        self.vuln_categories = self._load_vuln_categories()
+
+    def _load_vuln_categories(self):
+        """Load vulnerability category definitions"""
+        categories_path = Path(__file__).parent.parent.parent / "vulnerability_categories.json"
+        with open(categories_path, "r") as f:
+            data = json.load(f)
+        return data["categories"]
 
     def analyze(self, contract_info: Dict) -> Dict:
         """
-        Perform a holistic analysis of the smart contract to detect vulnerabilities.
+        Summarize the user's contract, retrieve known-vuln code,
+        build a strict JSON prompt, parse response as JSON.
         """
         try:
-            # 1. Extract contract information
-            functions = contract_info.get("function_details", [])
-            call_graph = contract_info.get("call_graph", {})
-
-            # 2. Query KB with enhanced context
-            query_results = self._get_relevant_vulnerabilities(functions, call_graph)
-
-            # 3. Construct analysis prompt
-            analysis_prompt = self._construct_analysis_prompt(contract_info, query_results)
-
-            # 4. Get LLM analysis
-            response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": self._get_system_prompt()},
-                    {"role": "user", "content": analysis_prompt}
-                ],
-                temperature=0
+            # 1) Build query for Pinecone
+            print("QUERYING Pinecone")
+            query_text = self._build_query_text(contract_info)
+            relevant_docs = self.retriever.invoke(contract_info["source_code"])
+            print("Found", len(relevant_docs), "relevant snippets")
+            # print(relevant_docs)
+            # 2) Build the user + system messages
+            system_prompt = (
+                "You are an expert smart contract security auditor. "
+                "You MUST respond with valid JSON and nothing else. "
+                "No disclaimers, no extra text."
             )
+            user_prompt = self._construct_analysis_prompt(contract_info, relevant_docs)
 
-            # 5. Parse and validate response
-            vulnerabilities = self._parse_vulnerability_response(
-                response.choices[0].message.content
-            )
+            # 3) Call LLM with system + user messages
+            print("CALLING Analyzer Agent")
+            response_text = self._call_llm(system_prompt, user_prompt)
 
-            # 6. Enrich results with KB context
-            enriched_results = self._enrich_results(vulnerabilities, query_results)
+            # 4) Parse JSON
+            vulnerabilities = self._parse_llm_response(response_text)
 
-            return {"vulnerabilities": enriched_results}
+            return {"vulnerabilities": vulnerabilities}
 
         except Exception as e:
-            logger.error(f"Error in vulnerability analysis: {str(e)}")
+            logger.error(f"AnalyzerAgent error: {str(e)}")
             return {"vulnerabilities": [], "error": str(e)}
 
-    def _get_relevant_vulnerabilities(self, functions: List[Dict], call_graph: Dict) -> List[Dict]:
+    def _build_query_text(self, contract_info: Dict) -> str:
+        """Small summary of the user’s contract to retrieve related vulnerabilities."""
+        lines = []
+        for fn in contract_info.get("function_details", []):
+            lines.append(f"Function {fn['function']} calls {fn['called_functions']}")
+        return "\n".join(lines)
+
+    def _construct_analysis_prompt(self, contract_info: Dict, relevant_docs: List[Document]) -> str:
         """
-        Query the knowledge base for relevant vulnerabilities based on contract features
+        We keep it simpler. We'll provide the user contract summary, and
+        relevant known vulnerability docs. Then we instruct the LLM to produce JSON only.
         """
-        # Construct feature-based queries
-        queries = []
 
-        # Query based on function characteristics
-        for func in functions:
-            func_query = f"""
-            Analyze for vulnerabilities in function:
-            - Name: {func['function']}
-            - Visibility: {func['visibility']}
-            - Parameters: {func['parameters']}
-            - Returns: {func['returns']}
-            - Called Functions: {func['called_functions']}
-            - Content: {func['content']}
-            """
-            queries.append(func_query)
+        # Contract Source Code
+        contract = "\n=== CONTRACT SOURCE CODE ===\n"
+        contract += contract_info.get("source_code", "N/A")
 
-        # Query based on call graph patterns
-        call_graph_query = f"Analyze call patterns for vulnerabilities: {json.dumps(call_graph)}"
-        queries.append(call_graph_query)
-
-        # Get results from KB for each query
-        all_results = []
-        for query in queries:
-            results = self.kb.query_knowledge_base(query, k=3)
-            all_results.extend(results)
-
-        # Deduplicate and sort by relevance
-        seen = set()
-        unique_results = []
-        for result in sorted(all_results, key=lambda x: x['relevance_score']):
-            if result['name'] not in seen:
-                seen.add(result['name'])
-                unique_results.append(result)
-
-        return unique_results
-
-    def _construct_analysis_prompt(self, contract_info: Dict, kb_results: List[Dict]) -> str:
-        """
-        Construct detailed analysis prompt incorporating KB results
-        """
-        prompt = "Smart Contract Security Analysis\n\n"
-
-        # 1. Contract Overview
-        prompt += "Contract Functions:\n"
-        for func in contract_info.get("function_details", []):
-            prompt += f"""
-Function: {func['function']}
-Visibility: {func['visibility']}
-Parameters: {func['parameters']}
-Called Functions: {func['called_functions']}
-Content: {func['content']}
-Returns: {func['returns']}
----
-"""
-
-        # 2. Potential Vulnerabilities
-        prompt += "\nPotential Vulnerability Patterns to Consider:\n"
-        for result in kb_results:
-            prompt += f"""
-Vulnerability: {result['name']}
-Description: {result['description']}
-Impact: {result['impact']}
-Relevant Pattern: {result['matching_chunk']}
----
-"""
-
-        # 3. Analysis Instructions
-        prompt += """
-Analyze the contract for these vulnerabilities considering:
-1. Function interactions and call patterns
-2. State variable modifications
-3. External calls and their ordering
-4. Access control mechanisms
-5. Input validation and sanitization
-"""
-
-        return prompt
-
-    def _get_system_prompt(self) -> str:
-        """
-        Define the system prompt for the LLM
-        """
-        return """You are an expert smart contract security auditor. Analyze the provided contract
-        and identify potential vulnerabilities. For each vulnerability found, provide:
-        1. Vulnerability type and classification
-        2. Confidence score (0-1)
-        3. Detailed technical reasoning
-        4. Affected functions and components from the section titled "Contract Functions"
-        5. Potential impact and exploitation scenarios
-
-        Output in strict JSON format:
-        {
-            "vulnerabilities": [
-                {
-                    "vulnerability_type": "string",
-                    "confidence_score": float,
-                    "reasoning": "string",
-                    "affected_functions": ["string"],
-                    "impact": "string",
-                    "exploitation_scenario": "string"
-                }
-            ]
-        }"""
-
-    def _parse_vulnerability_response(self, response: str) -> List[Dict]:
-        """
-        Parse and validate LLM response, handling code block markers
-        """
-        try:
-            # Clean the response by removing code block markers
-            cleaned_response = response.strip()
-            if cleaned_response.startswith("```"):
-                # Remove opening code block
-                cleaned_response = cleaned_response.split("\n", 1)[1]
-            if cleaned_response.endswith("```"):
-                # Remove closing code block
-                cleaned_response = cleaned_response.rsplit("\n", 1)[0]
-            # Remove any "json" language identifier
-            cleaned_response = cleaned_response.replace("```json", "").replace("```", "")
-
-            # Parse the cleaned JSON
-            parsed = json.loads(cleaned_response)
-            vulnerabilities = parsed.get("vulnerabilities", [])
-
-            # Validate each vulnerability entry
-            validated = []
-            for vuln in vulnerabilities:
-                if self._validate_vulnerability_entry(vuln):
-                    validated.append(vuln)
-
-            return validated
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse LLM response: {response}")
-            logger.error(f"JSON decode error: {str(e)}")
-            return []
-        except Exception as e:
-            logger.error(f"Unexpected error parsing response: {str(e)}")
-            return []
-
-    def _validate_vulnerability_entry(self, vuln: Dict) -> bool:
-        """
-        Validate vulnerability entry has required fields
-        """
-        required_fields = {
-            "vulnerability_type": str,
-            "confidence_score": float,
-            "reasoning": str,
-            "affected_functions": list
-        }
-
-        try:
-            for field, field_type in required_fields.items():
-                if field not in vuln or not isinstance(vuln[field], field_type):
-                    return False
-            return True
-        except Exception:
-            return False
-
-    def _enrich_results(self, vulnerabilities: List[Dict], kb_results: List[Dict]) -> List[Dict]:
-        """
-        Enrich vulnerability results with KB context
-        """
-        enriched = []
-        for vuln in vulnerabilities:
-            # Find matching KB entry
-            kb_match = next(
-                (r for r in kb_results if r['name'].lower() == vuln['vulnerability_type'].lower()),
-                None
+        # Summarize user contract
+        summary = "=== USER CONTRACT SUMMARY ===\n"
+        for fn in contract_info.get("function_details", []):
+            summary += (
+                f"- Function {fn['function']} (visibility={fn['visibility']}), calls={fn['called_functions']}\n"
             )
 
-            if kb_match:
-                vuln.update({
-                    "kb_description": kb_match['description'],
-                    "kb_impact": kb_match['impact'],
-                    "prevention_measures": kb_match.get('prevention', []),
-                    "exploit_template": kb_match['exploit_template']
-                })
+        # Add known vuln snippets
+        snippet_text = "\n=== KNOWN VULNERABILITY SNIPPETS ===\n"
+        for i, doc in enumerate(relevant_docs, start=1):
+            meta = doc.metadata
+            lines_range = f"{meta.get('start_line')} - {meta.get('end_line')}"
+            cats = meta.get("vuln_categories", [])
+            # if not cats:
+            #     continue
+            snippet_text += f"[Snippet] {meta.get('filename','Unknown')} lines {lines_range} cats={cats}\n"
+            snippet_text += doc.page_content[:1500]  # truncated to 1500 chars
+            snippet_text += "\n\n"
 
-            enriched.append(vuln)
+        print("Snippet text:", snippet_text)
 
-        return enriched
+        # Category guidance section
+        category_guidance = "\n=== VULNERABILITY CATEGORY GUIDANCE ===\n"
+
+        # Get all categories from our taxonomy
+        all_categories = self.vuln_categories.keys()
+
+        # Get categories present in retrieved snippets
+        snippet_categories = set()
+        for doc in relevant_docs:
+            snippet_categories.update(doc.metadata.get("vuln_categories", []))
+
+        # Add guidance for ALL categories with priority markers
+        for cat in all_categories:
+            guidance = self.vuln_categories[cat]
+            priority_note = " (HIGH PRIORITY - MATCHES KNOWN VULNERABILITIES)" if cat in snippet_categories else ""
+
+            category_guidance += (
+                f"## {cat.upper()}{priority_note} ##\n"
+                f"Description: {guidance['description']}\n"
+                f"Common Patterns:\n- " + "\n- ".join(guidance['common_patterns']) + "\n"
+                f"Detection Strategy: {guidance['detection_strategy']}\n\n"
+            )
+
+        # Update system prompt
+        system_prompt = (
+            "You are an expert smart contract security auditor. You MUST:\n"
+            "1. Check for ALL these vulnerability categories:\n"
+            + "\n".join([f"- {cat}" for cat in all_categories]) +
+            "\n2. Pay SPECIAL ATTENTION to categories marked 'HIGH PRIORITY' that match known vulnerabilities\n"
+            "3. Follow detection strategies exactly\n"
+            "4. Return valid JSON with EXACT category names\n"
+            "5. Never invent new categories outside the provided list"
+        )
+
+        # Update task instructions
+        instructions = """\
+    TASK:
+    1. Systematically check for ALL vulnerability categories below
+    2. For HIGH PRIORITY categories (those with matching examples):
+    - Compare directly with similar code patterns
+    - Apply detection strategies rigorously
+    3. For other categories:
+    - Perform brief checks based on detection strategies
+    4. Format findings as:
+
+    {
+    "vulnerabilities": [{
+        "vulnerability_type": "EXACT_CATEGORY_NAME",
+        "confidence_score": 0.0-1.0,
+        "reasoning": "Specific pattern match and analysis steps",
+        "affected_functions": ["..."],
+        "impact": "...",
+        "exploitation_scenario": "..."
+    }]
+    }"""
+
+        full_prompt = contract + summary + category_guidance + snippet_text + instructions
+        return full_prompt
+
+    def _call_llm(self, system_prompt: str, user_prompt: str) -> str:
+        """
+        Use openai.ChatCompletion with a system role to enforce JSON output.
+        """
+        resp = self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0
+        )
+        return resp.choices[0].message.content.strip()
+
+    def _parse_llm_response(self, response_text: str) -> List[Dict]:
+        """
+        Attempt to parse the LLM's response as JSON. If it fails,
+        try to look for code blocks containing JSON.
+        """
+        try:
+            return json.loads(response_text).get("vulnerabilities", [])
+        except json.JSONDecodeError:
+            logger.error("LLM response not valid JSON, attempting fallback.\n" + response_text)
+            # fallback attempt: search for triple backtick code blocks
+            import re
+            match = re.search(r"```(?:json)?(.*?)```", response_text, re.DOTALL)
+            if match:
+                block = match.group(1).strip()
+                try:
+                    return json.loads(block).get("vulnerabilities", [])
+                except:
+                    pass
+
+            # final fallback => return a single “unknown”
+            return [
+                {
+                    "vulnerability_type": "unknown",
+                    "confidence_score": 0.0,
+                    "reasoning": "LLM did not produce valid JSON or no code. Fallback used.",
+                    "affected_functions": [],
+                    "impact": "unknown",
+                    "exploitation_scenario": "unknown"
+                }
+            ]
