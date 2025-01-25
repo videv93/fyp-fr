@@ -34,9 +34,10 @@ class AnalyzerAgent:
         """
         try:
             # 1) Build query for Pinecone
-            print("QUERYING PINECONE")
+            print("QUERYING Pinecone")
             query_text = self._build_query_text(contract_info)
-            relevant_docs = self.retriever.get_relevant_documents(query_text)
+            relevant_docs = self.retriever.invoke(query_text)
+            print("Found", len(relevant_docs), "relevant snippets")
 
             # 2) Build the user + system messages
             system_prompt = (
@@ -45,16 +46,13 @@ class AnalyzerAgent:
                 "No disclaimers, no extra text."
             )
             user_prompt = self._construct_analysis_prompt(contract_info, relevant_docs)
-            print("PROMPT: ", user_prompt)
 
             # 3) Call LLM with system + user messages
-            print("CALLING LLM")
+            print("CALLING Analyzer Agent")
             response_text = self._call_llm(system_prompt, user_prompt)
-            logger.info(f"Raw LLM response:\n{response_text}")
 
             # 4) Parse JSON
             vulnerabilities = self._parse_llm_response(response_text)
-            print("VULNERABILITIES: ", vulnerabilities)
 
             return {"vulnerabilities": vulnerabilities}
 
