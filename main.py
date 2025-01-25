@@ -12,7 +12,7 @@ def main():
         raise ValueError("Please set OPENAI_API_KEY environment variable")
 
     # Path to the user's new contract that we want to analyze
-    filepath = "static_analysis/test_contracts/sample.sol"
+    filepath = "static_analysis/test_contracts/reentrancy.sol"
     function_details, call_graph, detector_results = analyze_contract(filepath)
 
     # Get source code from the file

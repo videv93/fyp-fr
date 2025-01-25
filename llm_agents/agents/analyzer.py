@@ -2,6 +2,7 @@
 # File: llm_agents/agents/analyzer.py
 # ==============================
 from typing import Dict, List
+from pathlib import Path
 import json
 import logging
 import os
@@ -16,6 +17,15 @@ class AnalyzerAgent:
         self.retriever = retriever
         self.model_name = model_name
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        # Load vulnerability categories
+        self.vuln_categories = self._load_vuln_categories()
+
+    def _load_vuln_categories(self):
+        """Load vulnerability category definitions"""
+        categories_path = Path(__file__).parent.parent.parent / "vulnerability_categories.json"
+        with open(categories_path, "r") as f:
+            data = json.load(f)
+        return data["categories"]
 
     def analyze(self, contract_info: Dict) -> Dict:
         """
@@ -88,32 +98,63 @@ class AnalyzerAgent:
             snippet_text += doc.page_content[:1500]  # truncated to 1500 chars
             snippet_text += "\n\n"
 
-        # The final instructions:
+        # Category guidance section
+        category_guidance = "\n=== VULNERABILITY CATEGORY GUIDANCE ===\n"
+
+        # Get all categories from our taxonomy
+        all_categories = self.vuln_categories.keys()
+
+        # Get categories present in retrieved snippets
+        snippet_categories = set()
+        for doc in relevant_docs:
+            snippet_categories.update(doc.metadata.get("vuln_categories", []))
+
+        # Add guidance for ALL categories with priority markers
+        for cat in all_categories:
+            guidance = self.vuln_categories[cat]
+            priority_note = " (HIGH PRIORITY - MATCHES KNOWN VULNERABILITIES)" if cat in snippet_categories else ""
+
+            category_guidance += (
+                f"## {cat.upper()}{priority_note} ##\n"
+                f"Description: {guidance['description']}\n"
+                f"Common Patterns:\n- " + "\n- ".join(guidance['common_patterns']) + "\n"
+                f"Detection Strategy: {guidance['detection_strategy']}\n\n"
+            )
+
+        # Update system prompt
+        system_prompt = (
+            "You are an expert smart contract security auditor. You MUST:\n"
+            "1. Check for ALL these vulnerability categories:\n"
+            + "\n".join([f"- {cat}" for cat in all_categories]) +
+            "\n2. Pay SPECIAL ATTENTION to categories marked 'HIGH PRIORITY' that match known vulnerabilities\n"
+            "3. Follow detection strategies exactly\n"
+            "4. Return valid JSON with EXACT category names\n"
+            "5. Never invent new categories outside the provided list"
+        )
+
+        # Update task instructions
         instructions = """\
-TASK:
-1. Compare the known vulnerabilities above with the user contract summary.
-2. Identify potential vulnerabilities in the user contract and fill the following JSON format:
+    TASK:
+    1. Systematically check for ALL vulnerability categories below
+    2. For HIGH PRIORITY categories (those with matching examples):
+    - Compare directly with similar code patterns
+    - Apply detection strategies rigorously
+    3. For other categories:
+    - Perform brief checks based on detection strategies
+    4. Format findings as:
 
-{
-  "vulnerabilities": [
     {
-      "vulnerability_type": "...",
-      "confidence_score": 0.0,
-      "reasoning": "...",
-      "affected_functions": ["..."],
-      "impact": "...",
-      "exploitation_scenario": "..."
-    }
-  ]
-}
+    "vulnerabilities": [{
+        "vulnerability_type": "EXACT_CATEGORY_NAME",
+        "confidence_score": 0.0-1.0,
+        "reasoning": "Specific pattern match and analysis steps",
+        "affected_functions": ["..."],
+        "impact": "...",
+        "exploitation_scenario": "..."
+    }]
+    }"""
 
-If you cannot determine any vulnerabilities, still produce a JSON with a single item
-that says "vulnerability_type": "unknown", "confidence_score": 0, etc.
-
-Important: Return ONLY valid JSON. No extra text.
-"""
-
-        full_prompt = contract + summary + snippet_text + instructions
+        full_prompt = contract + summary + category_guidance + snippet_text + instructions
         return full_prompt
 
     def _call_llm(self, system_prompt: str, user_prompt: str) -> str:
