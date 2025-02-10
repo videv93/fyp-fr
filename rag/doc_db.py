@@ -14,6 +14,7 @@ from langchain_community.vectorstores import Pinecone
 
 load_dotenv()
 
+
 def init_pinecone_index(index_name: str = "auditme"):
     """
     Initialize Pinecone, create index if it doesn't exist.
@@ -22,8 +23,7 @@ def init_pinecone_index(index_name: str = "auditme"):
       - PINECONE_ENV
     """
     pc = pinecone.Pinecone(
-        api_key=os.getenv("PINECONE_API_KEY"),
-        environment=os.getenv("PINECONE_ENV")
+        api_key=os.getenv("PINECONE_API_KEY"), environment=os.getenv("PINECONE_ENV")
     )
 
     if index_name not in pc.list_indexes().names():
@@ -31,11 +31,9 @@ def init_pinecone_index(index_name: str = "auditme"):
             name=index_name,
             metric="cosine",
             dimension=1536,
-            spec=pinecone.ServerlessSpec(
-                cloud="aws",
-                region="us-east-1"
-            )
+            spec=pinecone.ServerlessSpec(cloud="aws", region="us-east-1"),
         )
+
 
 def load_json_vulns(json_path: str) -> list:
     """
@@ -51,12 +49,9 @@ def load_json_vulns(json_path: str) -> list:
         data = json.load(f)
     return data
 
+
 def chunk_contract_with_metadata(
-    full_text: str,
-    line_vulns: dict,
-    filename: str,
-    pragma: str = "",
-    source: str = ""
+    full_text: str, line_vulns: dict, filename: str, pragma: str = "", source: str = ""
 ) -> list:
     """
     Splits the contract text into token-based chunks (using TokenTextSplitter),
@@ -109,7 +104,7 @@ def chunk_contract_with_metadata(
             if c_line.startswith("<LINE="):
                 try:
                     idx = c_line.index(">")
-                    c_line = c_line[idx+1:]  # everything after the '>'
+                    c_line = c_line[idx + 1 :]  # everything after the '>'
                 except ValueError:
                     # If ">" is not found, keep the line as is
                     print(f"Warning: Malformed line marker in {filename}: {c_line}")
@@ -131,23 +126,21 @@ def chunk_contract_with_metadata(
             "pragma": pragma,
             "source": source,
             "start_line": str(start_line),  # Convert to string
-            "end_line": str(end_line),      # Convert to string
-            "vuln_lines": [str(line) for line in chunk_vuln_lines],  # Convert each line number to string
-            "vuln_categories": list(chunk_vuln_cats)  # Categories are already strings
+            "end_line": str(end_line),  # Convert to string
+            "vuln_lines": [
+                str(line) for line in chunk_vuln_lines
+            ],  # Convert each line number to string
+            "vuln_categories": list(chunk_vuln_cats),  # Categories are already strings
         }
 
-        doc = Document(
-            page_content=cleaned_text,
-            metadata=metadata
-        )
+        doc = Document(page_content=cleaned_text, metadata=metadata)
         documents.append(doc)
 
     return documents
 
+
 def build_pinecone_vectorstore_from_json(
-    json_path: str,
-    base_dataset_dir: str,
-    index_name: str = "auditme"
+    json_path: str, base_dataset_dir: str, index_name: str = "auditme"
 ):
     """
     1) Parse the JSON describing vulnerabilities
@@ -161,8 +154,7 @@ def build_pinecone_vectorstore_from_json(
 
     # Initialize Pinecone client
     pc = pinecone.Pinecone(
-        api_key=os.getenv("PINECONE_API_KEY"),
-        environment=os.getenv("PINECONE_ENV")
+        api_key=os.getenv("PINECONE_API_KEY"), environment=os.getenv("PINECONE_ENV")
     )
     index = pc.Index(index_name)
 
@@ -172,7 +164,7 @@ def build_pinecone_vectorstore_from_json(
         print("Index already contains data. Skipping document upload.")
         return Pinecone.from_existing_index(
             index_name=index_name,
-            embedding=OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
+            embedding=OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY")),
         )
 
     # If the index is empty, proceed with document upload
@@ -202,7 +194,7 @@ def build_pinecone_vectorstore_from_json(
             line_vulns_map,
             filename=cdata.get("name", ""),
             pragma=cdata.get("pragma", ""),
-            source=cdata.get("source", "")
+            source=cdata.get("source", ""),
         )
 
         all_docs.extend(doc_list)
@@ -213,27 +205,19 @@ def build_pinecone_vectorstore_from_json(
     embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
 
     # Upload documents to the index
-    vectorstore = Pinecone.from_documents(
-        all_docs,
-        embeddings,
-        index_name=index_name
-    )
+    vectorstore = Pinecone.from_documents(all_docs, embeddings, index_name=index_name)
     return vectorstore
 
+
 def get_vuln_retriever_from_json(
-    json_path: str,
-    base_dataset_dir: str,
-    index_name: str = "auditme",
-    top_k: int = 5
+    json_path: str, base_dataset_dir: str, index_name: str = "auditme", top_k: int = 5
 ):
     """
     Builds (or updates) the Pinecone index from your JSON-based vulnerability data,
     and returns a retriever for that index.
     """
     vectorstore = build_pinecone_vectorstore_from_json(
-        json_path=json_path,
-        base_dataset_dir=base_dataset_dir,
-        index_name=index_name
+        json_path=json_path, base_dataset_dir=base_dataset_dir, index_name=index_name
     )
     retriever = vectorstore.as_retriever(search_kwargs={"k": top_k})
     return retriever

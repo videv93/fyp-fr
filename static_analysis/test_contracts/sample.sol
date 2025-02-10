@@ -1,884 +1,436 @@
-/**
- *Submitted for verification at BscScan.com on 2022-12-09
- */
-
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-interface IERC20 {
-    function totalSupply() external view returns (uint256);
+interface IERC721Receiver {
+    function onERC721Received(address operator, address from, uint256 tokenId, bytes calldata data) external returns (bytes4);
+}
 
-    function decimals() external view returns (uint8);
 
-    function symbol() external view returns (string memory);
-
-    function name() external view returns (string memory);
-
-    function getOwner() external view returns (address);
-
-    function balanceOf(address account) external view returns (uint256);
-
-    function transfer(
-        address recipient,
-        uint256 amount
-    ) external returns (bool);
-
-    function allowance(
-        address _owner,
-        address spender
-    ) external view returns (uint256);
-
-    function approve(address spender, uint256 amount) external returns (bool);
-
-    function transferFrom(
-        address sender,
-        address recipient,
-        uint256 amount
-    ) external returns (bool);
-
+// OpenZeppelin ERC20 Implementation
+contract ERC20 {
     event Transfer(address indexed from, address indexed to, uint256 value);
-    event Approval(
-        address indexed owner,
-        address indexed spender,
-        uint256 value
-    );
-}
+    event Approval(address indexed owner, address indexed spender, uint256 value);
 
-contract Context {
-    constructor() {}
-
-    function _msgSender() internal view returns (address payable) {
-        return payable(msg.sender);
-    }
-
-    function _msgData() internal view returns (bytes memory) {
-        this;
-        return msg.data;
-    }
-}
-
-library SafeMath {
-    function add(uint256 a, uint256 b) internal pure returns (uint256) {
-        uint256 c = a + b;
-        require(c >= a, "SafeMath: addition overflow");
-
-        return c;
-    }
-
-    function sub(uint256 a, uint256 b) internal pure returns (uint256) {
-        return sub(a, b, "SafeMath: subtraction overflow");
-    }
-
-    function sub(
-        uint256 a,
-        uint256 b,
-        string memory errorMessage
-    ) internal pure returns (uint256) {
-        require(b <= a, errorMessage);
-        uint256 c = a - b;
-
-        return c;
-    }
-
-    function mul(uint256 a, uint256 b) internal pure returns (uint256) {
-        if (a == 0) {
-            return 0;
-        }
-
-        uint256 c = a * b;
-        require(c / a == b, "SafeMath: multiplication overflow");
-
-        return c;
-    }
-
-    function div(uint256 a, uint256 b) internal pure returns (uint256) {
-        return div(a, b, "SafeMath: division by zero");
-    }
-
-    function div(
-        uint256 a,
-        uint256 b,
-        string memory errorMessage
-    ) internal pure returns (uint256) {
-        // Solidity only automatically asserts when dividing by 0
-        require(b > 0, errorMessage);
-        uint256 c = a / b;
-        // assert(a == b * c + a % b); // There is no case in which this doesn't hold
-
-        return c;
-    }
-
-    function mod(uint256 a, uint256 b) internal pure returns (uint256) {
-        return mod(a, b, "SafeMath: modulo by zero");
-    }
-
-    function mod(
-        uint256 a,
-        uint256 b,
-        string memory errorMessage
-    ) internal pure returns (uint256) {
-        require(b != 0, errorMessage);
-        return a % b;
-    }
-}
-
-contract Ownable is Context {
-    address private _owner;
-
-    event OwnershipTransferred(
-        address indexed previousOwner,
-        address indexed newOwner
-    );
-
-    constructor() {
-        address msgSender = _msgSender();
-        _owner = msgSender;
-        emit OwnershipTransferred(address(0), msgSender);
-    }
-
-    function owner() public view returns (address) {
-        return _owner;
-    }
-
-    modifier onlyOwner() {
-        require(_owner == _msgSender(), "Ownable: caller is not the owner");
-        _;
-    }
-
-    function renounceOwnership() public onlyOwner {
-        emit OwnershipTransferred(_owner, address(0));
-        _owner = address(0);
-    }
-
-    function transferOwnership(address newOwner) public onlyOwner {
-        _transferOwnership(newOwner);
-    }
-
-    function _transferOwnership(address newOwner) internal {
-        require(
-            newOwner != address(0),
-            "Ownable: new owner is the zero address"
-        );
-        emit OwnershipTransferred(_owner, newOwner);
-        _owner = newOwner;
-    }
-}
-
-interface IPancakeFactory {
-    event PairCreated(
-        address indexed token0,
-        address indexed token1,
-        address pair,
-        uint256
-    );
-
-    function feeTo() external view returns (address);
-
-    function feeToSetter() external view returns (address);
-
-    function getPair(
-        address tokenA,
-        address tokenB
-    ) external view returns (address pair);
-
-    function allPairs(uint256) external view returns (address pair);
-
-    function allPairsLength() external view returns (uint256);
-
-    function createPair(
-        address tokenA,
-        address tokenB
-    ) external returns (address pair);
-
-    function setFeeTo(address) external;
-
-    function setFeeToSetter(address) external;
-}
-
-interface IPancakeswapV2Router01 {
-    function factory() external pure returns (address);
-
-    function WETH() external pure returns (address);
-
-    function addLiquidity(
-        address tokenA,
-        address tokenB,
-        uint256 amountADesired,
-        uint256 amountBDesired,
-        uint256 amountAMin,
-        uint256 amountBMin,
-        address to,
-        uint256 deadline
-    ) external returns (uint256 amountA, uint256 amountB, uint256 liquidity);
-
-    function addLiquidityETH(
-        address token,
-        uint256 amountTokenDesired,
-        uint256 amountTokenMin,
-        uint256 amountETHMin,
-        address to,
-        uint256 deadline
-    )
-        external
-        payable
-        returns (uint256 amountToken, uint256 amountETH, uint256 liquidity);
-
-    function removeLiquidity(
-        address tokenA,
-        address tokenB,
-        uint256 liquidity,
-        uint256 amountAMin,
-        uint256 amountBMin,
-        address to,
-        uint256 deadline
-    ) external returns (uint256 amountA, uint256 amountB);
-
-    function removeLiquidityETH(
-        address token,
-        uint256 liquidity,
-        uint256 amountTokenMin,
-        uint256 amountETHMin,
-        address to,
-        uint256 deadline
-    ) external returns (uint256 amountToken, uint256 amountETH);
-
-    function removeLiquidityWithPermit(
-        address tokenA,
-        address tokenB,
-        uint256 liquidity,
-        uint256 amountAMin,
-        uint256 amountBMin,
-        address to,
-        uint256 deadline,
-        bool approveMax,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external returns (uint256 amountA, uint256 amountB);
-
-    function removeLiquidityETHWithPermit(
-        address token,
-        uint256 liquidity,
-        uint256 amountTokenMin,
-        uint256 amountETHMin,
-        address to,
-        uint256 deadline,
-        bool approveMax,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external returns (uint256 amountToken, uint256 amountETH);
-
-    function swapExactTokensForTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external returns (uint256[] memory amounts);
-
-    function swapTokensForExactTokens(
-        uint256 amountOut,
-        uint256 amountInMax,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external returns (uint256[] memory amounts);
-
-    function swapExactETHForTokens(
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external payable returns (uint256[] memory amounts);
-
-    function swapTokensForExactETH(
-        uint256 amountOut,
-        uint256 amountInMax,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external returns (uint256[] memory amounts);
-
-    function swapExactTokensForETH(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external returns (uint256[] memory amounts);
-
-    function swapETHForExactTokens(
-        uint256 amountOut,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external payable returns (uint256[] memory amounts);
-
-    function quote(
-        uint256 amountA,
-        uint256 reserveA,
-        uint256 reserveB
-    ) external pure returns (uint256 amountB);
-
-    function getAmountOut(
-        uint256 amountIn,
-        uint256 reserveIn,
-        uint256 reserveOut
-    ) external pure returns (uint256 amountOut);
-
-    function getAmountIn(
-        uint256 amountOut,
-        uint256 reserveIn,
-        uint256 reserveOut
-    ) external pure returns (uint256 amountIn);
-
-    function getAmountsOut(
-        uint256 amountIn,
-        address[] calldata path
-    ) external view returns (uint256[] memory amounts);
-
-    function getAmountsIn(
-        uint256 amountOut,
-        address[] calldata path
-    ) external view returns (uint256[] memory amounts);
-}
-
-interface IPancakeswapV2Router02 is IPancakeswapV2Router01 {
-    function removeLiquidityETHSupportingFeeOnTransferTokens(
-        address token,
-        uint256 liquidity,
-        uint256 amountTokenMin,
-        uint256 amountETHMin,
-        address to,
-        uint256 deadline
-    ) external returns (uint256 amountETH);
-
-    function removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(
-        address token,
-        uint256 liquidity,
-        uint256 amountTokenMin,
-        uint256 amountETHMin,
-        address to,
-        uint256 deadline,
-        bool approveMax,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external returns (uint256 amountETH);
-
-    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external;
-
-    function swapExactETHForTokensSupportingFeeOnTransferTokens(
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external payable;
-
-    function swapExactTokensForETHSupportingFeeOnTransferTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external;
-}
-
-interface IUniswapV2Router01 {
-    function factory() external pure returns (address);
-
-    function WETH() external pure returns (address);
-
-    function addLiquidity(
-        address tokenA,
-        address tokenB,
-        uint256 amountADesired,
-        uint256 amountBDesired,
-        uint256 amountAMin,
-        uint256 amountBMin,
-        address to,
-        uint256 deadline
-    ) external returns (uint256 amountA, uint256 amountB, uint256 liquidity);
-
-    function addLiquidityETH(
-        address token,
-        uint256 amountTokenDesired,
-        uint256 amountTokenMin,
-        uint256 amountETHMin,
-        address to,
-        uint256 deadline
-    )
-        external
-        payable
-        returns (uint256 amountToken, uint256 amountETH, uint256 liquidity);
-
-    function removeLiquidity(
-        address tokenA,
-        address tokenB,
-        uint256 liquidity,
-        uint256 amountAMin,
-        uint256 amountBMin,
-        address to,
-        uint256 deadline
-    ) external returns (uint256 amountA, uint256 amountB);
-
-    function removeLiquidityETH(
-        address token,
-        uint256 liquidity,
-        uint256 amountTokenMin,
-        uint256 amountETHMin,
-        address to,
-        uint256 deadline
-    ) external returns (uint256 amountToken, uint256 amountETH);
-
-    function removeLiquidityWithPermit(
-        address tokenA,
-        address tokenB,
-        uint256 liquidity,
-        uint256 amountAMin,
-        uint256 amountBMin,
-        address to,
-        uint256 deadline,
-        bool approveMax,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external returns (uint256 amountA, uint256 amountB);
-
-    function removeLiquidityETHWithPermit(
-        address token,
-        uint256 liquidity,
-        uint256 amountTokenMin,
-        uint256 amountETHMin,
-        address to,
-        uint256 deadline,
-        bool approveMax,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external returns (uint256 amountToken, uint256 amountETH);
-
-    function swapExactTokensForTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external returns (uint256[] memory amounts);
-
-    function swapTokensForExactTokens(
-        uint256 amountOut,
-        uint256 amountInMax,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external returns (uint256[] memory amounts);
-
-    function swapExactETHForTokens(
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external payable returns (uint256[] memory amounts);
-
-    function swapTokensForExactETH(
-        uint256 amountOut,
-        uint256 amountInMax,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external returns (uint256[] memory amounts);
-
-    function swapExactTokensForETH(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external returns (uint256[] memory amounts);
-
-    function swapETHForExactTokens(
-        uint256 amountOut,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external payable returns (uint256[] memory amounts);
-
-    function quote(
-        uint256 amountA,
-        uint256 reserveA,
-        uint256 reserveB
-    ) external pure returns (uint256 amountB);
-
-    function getAmountOut(
-        uint256 amountIn,
-        uint256 reserveIn,
-        uint256 reserveOut
-    ) external pure returns (uint256 amountOut);
-
-    function getAmountIn(
-        uint256 amountOut,
-        uint256 reserveIn,
-        uint256 reserveOut
-    ) external pure returns (uint256 amountIn);
-
-    function getAmountsOut(
-        uint256 amountIn,
-        address[] calldata path
-    ) external view returns (uint256[] memory amounts);
-
-    function getAmountsIn(
-        uint256 amountOut,
-        address[] calldata path
-    ) external view returns (uint256[] memory amounts);
-}
-
-interface IUniswapV2Router02 is IUniswapV2Router01 {
-    function removeLiquidityETHSupportingFeeOnTransferTokens(
-        address token,
-        uint256 liquidity,
-        uint256 amountTokenMin,
-        uint256 amountETHMin,
-        address to,
-        uint256 deadline
-    ) external returns (uint256 amountETH);
-
-    function removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(
-        address token,
-        uint256 liquidity,
-        uint256 amountTokenMin,
-        uint256 amountETHMin,
-        address to,
-        uint256 deadline,
-        bool approveMax,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external returns (uint256 amountETH);
-
-    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external;
-
-    function swapExactETHForTokensSupportingFeeOnTransferTokens(
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external payable;
-
-    function swapExactTokensForETHSupportingFeeOnTransferTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external;
-}
-
-struct Terms {
-    uint256 minimumPrice; // vs principle value
-    uint256 maxPayout; // in thousandths of a %. i.e. 500 = 0.5%
-    uint32 vestingTerm; // in seconds
-}
-
-interface IBond {
-    function terms() external returns (Terms memory);
-}
-
-interface IUniswapV2Pair {
-    function getReserves()
-        external
-        view
-        returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
-}
-
-contract DFS is Context, IERC20, Ownable {
-    using SafeMath for uint256;
-
+    mapping(address => uint256) private _balances;
     mapping(address => mapping(address => uint256)) private _allowances;
 
-    mapping(address => uint256) private _balance;
-
-    mapping(address => uint256) private _tOwned;
-
-    mapping(address => bool) public exclusiveFromFee;
-
-    mapping(address => bool) public includeMinter;
-
-    uint256 private constant MAX = ~uint256(0);
     uint256 private _totalSupply;
-    uint256 private _tFeeTotal;
-    uint8 public _decimals;
-    string public _symbol;
-    string public _name;
+    string private _name;
+    string private _symbol;
 
-    address[] public holders;
-    mapping(address => uint256) holdersIndex;
-    mapping(address => bool) includeHolders;
-    address public destroyAddress = 0xc4DE46a5C8fc7f57F07E232b465243A3Da3692f0;
-    IBond public bond;
-    IERC20 public usdt;
-
-    uint256 public _liquidityFee = 1;
-    uint256 private _previousLiquidityFee = _liquidityFee;
-
-    address _tokenOwner;
-    IUniswapV2Router02 public uniswapV2Router;
-    IUniswapV2Pair public pair;
-    bool public swapping;
-    bool public swapAndLiquifyEnabled = true;
-    bool public takeFee = true;
-    address public multiSignAddress;
-    address public fundAddress;
-    address public DAO;
-    address[] public mintlist;
-    uint256 public initialSupply = 5000 ether;
-
-    constructor(address _usdt, address _multiSignAddress) {
-        _name = "DFS";
-        _symbol = "DFS";
-        _decimals = 18;
-        _totalSupply = initialSupply;
-        _balance[_msgSender()] = _totalSupply;
-        usdt = IERC20(_usdt);
-        multiSignAddress = _multiSignAddress;
-        exclusiveFromFee[_msgSender()] = true;
-        exclusiveFromFee[address(this)] = true;
-        emit Transfer(address(0), msg.sender, _totalSupply);
+    constructor(string memory name_, string memory symbol_) {
+        _name = name_;
+        _symbol = symbol_;
     }
 
-    function setExclusiveFromFee(address[] memory _exclusive) public onlyOwner {
-        for (uint256 i = 0; i < _exclusive.length; i++) {
-            if (!exclusiveFromFee[_exclusive[i]]) {
-                exclusiveFromFee[_exclusive[i]] = true;
-            }
-        }
-    }
-
-    function setPair(address _pair) public onlyOwner {
-        pair = IUniswapV2Pair(_pair);
-    }
-
-    function setMultiSignAddress(address _address) public onlyOwner {
-        multiSignAddress = _address;
-    }
-
-    function setBondAddress(address _bond) public onlyOwner {
-        bond = IBond(_bond);
-        exclusiveFromFee[address(bond)] = true;
-    }
-
-    function getHolders() external view returns (address[] memory) {
-        return holders;
-    }
-
-    function getHoldersLength() external view returns (uint256) {
-        return holders.length;
-    }
-
-    function getOwner() external view returns (address) {
-        return owner();
-    }
-
-    function decimals() external view returns (uint8) {
-        return _decimals;
-    }
-
-    function symbol() external view returns (string memory) {
-        return _symbol;
-    }
-
-    function name() external view returns (string memory) {
+    function name() public view virtual returns (string memory) {
         return _name;
     }
 
-    function totalSupply() external view returns (uint256) {
+    function symbol() public view virtual returns (string memory) {
+        return _symbol;
+    }
+
+    function decimals() public view virtual returns (uint8) {
+        return 18;
+    }
+
+    function totalSupply() public view virtual returns (uint256) {
         return _totalSupply;
     }
 
-    function balanceOf(address account) public view override returns (uint256) {
-        return _balance[account];
+    function balanceOf(address account) public view virtual returns (uint256) {
+        return _balances[account];
     }
 
-    function transfer(
-        address recipient,
-        uint256 amount
-    ) external returns (bool) {
-        _transfer(_msgSender(), recipient, amount);
+    function transfer(address to, uint256 amount) public virtual returns (bool) {
+        _transfer(msg.sender, to, amount);
         return true;
     }
 
-    function allowance(
-        address owner,
-        address spender
-    ) external view returns (uint256) {
+    function allowance(address owner, address spender) public view virtual returns (uint256) {
         return _allowances[owner][spender];
     }
 
-    function approve(address spender, uint256 amount) public returns (bool) {
-        _approve(_msgSender(), spender, amount);
+    function approve(address spender, uint256 amount) public virtual returns (bool) {
+        _approve(msg.sender, spender, amount);
         return true;
     }
 
-    function transferFrom(
-        address sender,
-        address recipient,
-        uint256 amount
-    ) public returns (bool) {
-        _transfer(sender, recipient, amount);
-        _approve(
-            sender,
-            _msgSender(),
-            _allowances[sender][_msgSender()].sub(
-                amount,
-                "BEP20: transfer amount exceeds allowance"
-            )
-        );
+    function transferFrom(address from, address to, uint256 amount) public virtual returns (bool) {
+        _spendAllowance(from, msg.sender, amount);
+        _transfer(from, to, amount);
         return true;
     }
 
-    function increaseAllowance(
-        address spender,
-        uint256 addedValue
-    ) public returns (bool) {
-        _approve(
-            _msgSender(),
-            spender,
-            _allowances[_msgSender()][spender].add(addedValue)
-        );
-        return true;
-    }
-
-    function decreaseAllowance(
-        address spender,
-        uint256 subtractedValue
-    ) public returns (bool) {
-        _approve(
-            _msgSender(),
-            spender,
-            _allowances[_msgSender()][spender].sub(
-                subtractedValue,
-                "BEP20: decreased allowance below zero"
-            )
-        );
-        return true;
-    }
-
-    function burn(uint256 amount) public returns (bool) {
-        _burn(_msgSender(), amount);
-        return true;
-    }
-
-    function _tokenTransfer(
-        address sender,
-        address recipient,
-        uint256 amount
-    ) private {}
-
-    function isContract(address account) public view returns (bool) {
-        uint256 size;
-        // solhint-disable-next-line no-inline-assembly
-        assembly {
-            size := extcodesize(account)
-        }
-        return size > 0;
-    }
-
-    function _transfer(address from, address to, uint256 amount) internal {
+    function _transfer(address from, address to, uint256 amount) internal virtual {
         require(from != address(0), "ERC20: transfer from the zero address");
-        require(amount > 0, "Transfer amount must be greater than zero");
-        if (from == address(this) || to == address(this)) {
-            return;
+        require(to != address(0), "ERC20: transfer to the zero address");
+
+        uint256 fromBalance = _balances[from];
+        require(fromBalance >= amount, "ERC20: transfer amount exceeds balance");
+        unchecked {
+            _balances[from] = fromBalance - amount;
         }
-        uint256 rate = 5;
-        uint256 fee = 0;
-        if (to == address(pair) || from == address(pair)) {
-            if (takeFee && !exclusiveFromFee[from]) {
-                fee = amount.mul(rate).div(1000);
-                _balance[from] = _balance[from].sub(amount).sub(fee);
-                _balance[destroyAddress] = _balance[destroyAddress].add(fee);
-                emit Transfer(from, destroyAddress, fee);
-            }
-        } else {
-            _balance[from] = _balance[from].sub(amount);
-        }
-        if (_balance[from] == 0 && holders.length != 0) {
-            holders[holdersIndex[from]] = holders[holders.length - 1];
-            holdersIndex[holders[holders.length - 1]] = holdersIndex[from];
-            holders.pop();
-            includeHolders[from] = false;
-        }
-        _balance[to] = _balance[to].add(amount);
-        if (!includeHolders[to]) {
-            holdersIndex[to] = holders.length;
-            holders.push(to);
-            includeHolders[to] = true;
-        }
+        _balances[to] += amount;
+
         emit Transfer(from, to, amount);
     }
 
-    function setMintlist(address[] memory _list) public onlyOwner {
-        for (uint256 i = 0; i < _list.length; ++i) {
-            if (!includeMinter[_list[i]]) {
-                mintlist.push(_list[i]);
-                includeMinter[_list[i]] = true;
-            }
-        }
-    }
+    function _mint(address account, uint256 amount) internal virtual {
+        require(account != address(0), "ERC20: mint to the zero address");
 
-    function mint(uint256 amount) public returns (bool) {
-        require(includeMinter[msg.sender], "Not in mint list");
-        _mint(_msgSender(), amount);
-        return true;
-    }
-
-    function _mint(address account, uint256 amount) internal {
-        require(account != address(0), "BEP20: mint to the zero address");
-
-        _totalSupply = _totalSupply.add(amount);
-        _balance[account] = _balance[account].add(amount);
+        _totalSupply += amount;
+        _balances[account] += amount;
         emit Transfer(address(0), account, amount);
     }
 
-    function _burn(address account, uint256 amount) internal {
-        require(account != address(0), "BEP20: burn from the zero address");
-
-        _balance[account] = _balance[account].sub(
-            amount,
-            "BEP20: burn amount exceeds balance"
-        );
-        _totalSupply = _totalSupply.sub(amount);
-        emit Transfer(account, address(0), amount);
-    }
-
-    function _approve(address owner, address spender, uint256 amount) internal {
-        require(owner != address(0), "BEP20: approve from the zero address");
-        require(spender != address(0), "BEP20: approve to the zero address");
+    function _approve(address owner, address spender, uint256 amount) internal virtual {
+        require(owner != address(0), "ERC20: approve from the zero address");
+        require(spender != address(0), "ERC20: approve to the zero address");
 
         _allowances[owner][spender] = amount;
         emit Approval(owner, spender, amount);
     }
 
-    function _burnFrom(address account, uint256 amount) internal {
-        _burn(account, amount);
-        _approve(
-            account,
-            _msgSender(),
-            _allowances[account][_msgSender()].sub(
-                amount,
-                "BEP20: burn amount exceeds allowance"
-            )
+    function _spendAllowance(address owner, address spender, uint256 amount) internal virtual {
+        uint256 currentAllowance = allowance(owner, spender);
+        if (currentAllowance != type(uint256).max) {
+            require(currentAllowance >= amount, "ERC20: insufficient allowance");
+            unchecked {
+                _approve(owner, spender, currentAllowance - amount);
+            }
+        }
+    }
+}
+
+// OpenZeppelin ERC721 Implementation
+contract ERC721 {
+    event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
+    event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId);
+    event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
+
+    mapping(uint256 => address) private _owners;
+    mapping(address => uint256) private _balances;
+    mapping(uint256 => address) private _tokenApprovals;
+    mapping(address => mapping(address => bool)) private _operatorApprovals;
+
+    string private _name;
+    string private _symbol;
+
+    constructor(string memory name_, string memory symbol_) {
+        _name = name_;
+        _symbol = symbol_;
+    }
+
+    function name() public view virtual returns (string memory) {
+        return _name;
+    }
+
+    function symbol() public view virtual returns (string memory) {
+        return _symbol;
+    }
+
+    function balanceOf(address owner) public view virtual returns (uint256) {
+        require(owner != address(0), "ERC721: balance query for the zero address");
+        return _balances[owner];
+    }
+
+    function ownerOf(uint256 tokenId) public view virtual returns (address) {
+        address owner = _owners[tokenId];
+        require(owner != address(0), "ERC721: owner query for nonexistent token");
+        return owner;
+    }
+
+    function approve(address to, uint256 tokenId) public virtual {
+        address owner = ERC721.ownerOf(tokenId);
+        require(to != owner, "ERC721: approval to current owner");
+
+        require(
+            msg.sender == owner || isApprovedForAll(owner, msg.sender),
+            "ERC721: approve caller is not owner nor approved for all"
         );
+
+        _approve(to, tokenId);
+    }
+
+    function getApproved(uint256 tokenId) public view virtual returns (address) {
+        require(_exists(tokenId), "ERC721: approved query for nonexistent token");
+        return _tokenApprovals[tokenId];
+    }
+
+    function setApprovalForAll(address operator, bool approved) public virtual {
+        _setApprovalForAll(msg.sender, operator, approved);
+    }
+
+    function isApprovedForAll(address owner, address operator) public view virtual returns (bool) {
+        return _operatorApprovals[owner][operator];
+    }
+
+    function transferFrom(address from, address to, uint256 tokenId) public virtual {
+        require(_isApprovedOrOwner(msg.sender, tokenId), "ERC721: transfer caller is not owner nor approved");
+
+        _transfer(from, to, tokenId);
+    }
+
+    function safeTransferFrom(address from, address to, uint256 tokenId) public virtual {
+        safeTransferFrom(from, to, tokenId, "");
+    }
+
+    function safeTransferFrom(address from, address to, uint256 tokenId, bytes memory _data) public virtual {
+        require(_isApprovedOrOwner(msg.sender, tokenId), "ERC721: transfer caller is not owner nor approved");
+        _safeTransfer(from, to, tokenId, _data);
+    }
+
+    function _safeTransfer(address from, address to, uint256 tokenId, bytes memory _data) internal virtual {
+        _transfer(from, to, tokenId);
+        require(_checkOnERC721Received(from, to, tokenId, _data), "ERC721: transfer to non ERC721Receiver implementer");
+    }
+
+    function _exists(uint256 tokenId) internal view virtual returns (bool) {
+        return _owners[tokenId] != address(0);
+    }
+
+    function _isApprovedOrOwner(address spender, uint256 tokenId) internal view virtual returns (bool) {
+        require(_exists(tokenId), "ERC721: operator query for nonexistent token");
+        address owner = ERC721.ownerOf(tokenId);
+        return (spender == owner || getApproved(tokenId) == spender || isApprovedForAll(owner, spender));
+    }
+
+    function _mint(address to, uint256 tokenId) internal virtual {
+        require(to != address(0), "ERC721: mint to the zero address");
+        require(!_exists(tokenId), "ERC721: token already minted");
+
+        _balances[to] += 1;
+        _owners[tokenId] = to;
+
+        emit Transfer(address(0), to, tokenId);
+    }
+
+    function _burn(uint256 tokenId) internal virtual {
+        address owner = ERC721.ownerOf(tokenId);
+
+        _approve(address(0), tokenId);
+
+        _balances[owner] -= 1;
+        delete _owners[tokenId];
+
+        emit Transfer(owner, address(0), tokenId);
+    }
+
+    function _transfer(address from, address to, uint256 tokenId) internal virtual {
+        require(ERC721.ownerOf(tokenId) == from, "ERC721: transfer of token that is not own");
+        require(to != address(0), "ERC721: transfer to the zero address");
+
+        _approve(address(0), tokenId);
+
+        _balances[from] -= 1;
+        _balances[to] += 1;
+        _owners[tokenId] = to;
+
+        emit Transfer(from, to, tokenId);
+    }
+
+    function _approve(address to, uint256 tokenId) internal virtual {
+        _tokenApprovals[tokenId] = to;
+        emit Approval(ERC721.ownerOf(tokenId), to, tokenId);
+    }
+
+    function _setApprovalForAll(address owner, address operator, bool approved) internal virtual {
+        require(owner != operator, "ERC721: approve to caller");
+        _operatorApprovals[owner][operator] = approved;
+        emit ApprovalForAll(owner, operator, approved);
+    }
+
+    function _checkOnERC721Received(address from, address to, uint256 tokenId, bytes memory _data) private returns (bool) {
+        if (to.code.length > 0) {
+            try IERC721Receiver(to).onERC721Received(msg.sender, from, tokenId, _data) returns (bytes4 retval) {
+                return retval == IERC721Receiver.onERC721Received.selector;
+            } catch (bytes memory reason) {
+                if (reason.length == 0) {
+                    revert("ERC721: transfer to non ERC721Receiver implementer");
+                } else {
+                    assembly {
+                        revert(add(32, reason), mload(reason))
+                    }
+                }
+            }
+        } else {
+            return true;
+        }
+    }
+    
+    function _safeMint(address to, uint256 tokenId) internal virtual {
+        _mint(to, tokenId);
+        require(_checkOnERC721Received(address(0), to, tokenId, ""), "ERC721: transfer to non ERC721Receiver implementer");
+    }
+
+}
+
+// OpenZeppelin Ownable Implementation
+contract Ownable {
+    address private _owner;
+
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+    constructor() {
+        _transferOwnership(msg.sender);
+    }
+
+    function owner() public view virtual returns (address) {
+        return _owner;
+    }
+
+    modifier onlyOwner() {
+        require(owner() == msg.sender, "Ownable: caller is not the owner");
+        _;
+    }
+
+    function renounceOwnership() public virtual onlyOwner {
+        _transferOwnership(address(0));
+    }
+
+    function transferOwnership(address newOwner) public virtual onlyOwner {
+        require(newOwner != address(0), "Ownable: new owner is the zero address");
+        _transferOwnership(newOwner);
+    }
+
+    function _transferOwnership(address newOwner) internal virtual {
+        address oldOwner = _owner;
+        _owner = newOwner;
+        emit OwnershipTransferred(oldOwner, newOwner);
+    }
+}
+
+// DonationToken Contract
+contract DonationToken is ERC20 {
+    constructor(uint256 initialSupply) ERC20("DonationToken", "DNT") {
+        _mint(msg.sender, initialSupply);
+    }
+}
+
+// DonationNFT Contract
+contract DonationNFT is ERC721, Ownable {
+    uint256 private _tokenIds;
+    mapping(address => bool) public validCharities;
+    address charityFactoryAddress;
+
+    constructor() ERC721("DonationNFT", "DNFT") {}
+
+    function mintDonationNFT(address _to, uint256 _donationAmount) external returns (uint256) {
+        require(validCharities[msg.sender], "Only valid charity contracts can mint"); 
+        require(_donationAmount > 0, "A donation must be made");
+
+        _tokenIds += 1;
+        _safeMint(_to, _tokenIds);
+        return _tokenIds;
+    }
+
+    function setCharityFactory(address _charityFactory) public onlyOwner {
+        charityFactoryAddress = _charityFactory;
+    }
+
+    function addValidCharity(address charity) external {
+        require(msg.sender == charityFactoryAddress, "Only CharityFactory can add valid charities");
+        validCharities[charity] = true;
+    }
+}
+
+// TrustlessDonation Contract
+contract TrustlessDonation {
+    DonationToken private _donationToken;
+    DonationNFT private _donationNFT;
+    string public charityName;
+    uint public totalDonations;
+    address public charityOwner;
+
+    mapping(address => bool) suppliers;
+    address[] public supplierList;
+    
+    event Donation(address indexed donor, address indexed charity, uint256 amount, uint256 tokenId);
+    event Purchase(address indexed charity, address indexed supplier, uint256 amount);
+    event CharityNameChanged(address indexed charity, string newName);
+    event SupplierRegistered(address indexed charity, address indexed supplier);
+    event SupplierRemoved(address indexed charity, address indexed supplier);
+
+    constructor(DonationToken donationToken, DonationNFT donationNFT, address _charityOwner, string memory _charityName) {
+        _donationToken = donationToken;
+        _donationNFT = donationNFT;
+        charityOwner = _charityOwner;
+        charityName = _charityName;
+    }
+
+    modifier onlyCharityOwner() {
+        require(msg.sender == charityOwner, "Caller is not the charity owner");
+        _;
+    }
+
+    function setCharityName(string memory _charityName) external onlyCharityOwner {
+        charityName = _charityName;
+        emit CharityNameChanged(msg.sender, _charityName);
+    }
+
+    function registerSupplier(address _supplier) external onlyCharityOwner {
+        suppliers[_supplier] = true;
+        supplierList.push(_supplier);
+        emit SupplierRegistered(msg.sender, _supplier);
+    }
+    
+    function removeSupplier(address _supplier) external onlyCharityOwner {
+        suppliers[_supplier] = false;
+        for (uint i = 0; i < supplierList.length; i++) {
+            if (supplierList[i] == _supplier) {
+                supplierList[i] = supplierList[supplierList.length - 1];
+                supplierList.pop();
+                break;
+            }
+        }
+        emit SupplierRemoved(msg.sender, _supplier);
+    }
+
+    function getRegisteredSuppliers() external view returns (address[] memory) {
+        return supplierList;
+    }
+
+    function donate(uint256 amount) external {
+        require(_donationToken.transferFrom(msg.sender, address(this), amount), "Donation failed");
+        
+        uint256 tokenId = _donationNFT.mintDonationNFT(msg.sender, amount);
+
+        totalDonations += amount;
+        
+        emit Donation(msg.sender, address(this), amount, tokenId);
+    }
+    
+    function purchase(address supplier, uint256 amount) external onlyCharityOwner {
+        require(suppliers[supplier], "Invalid supplier");
+        
+        require(_donationToken.transfer(supplier, amount), "Purchase failed");
+
+        totalDonations -= amount;
+
+        emit Purchase(msg.sender, supplier, amount);
+    }
+}
+
+// CharityFactory Contract
+contract CharityFactory is Ownable {
+    DonationToken private _donationToken;
+    DonationNFT private _donationNFT;
+    mapping(address => TrustlessDonation) public charityContracts;
+    event CharityCreated(address creator, address charity, string name);
+
+    constructor(DonationToken donationToken, DonationNFT donationNFT) {
+        _donationToken = donationToken;
+        _donationNFT = donationNFT;
+    }
+
+    function createCharityContract(string memory charityName) external {
+        require(address(charityContracts[msg.sender]) == address(0), "User already has a charity contract");
+        TrustlessDonation newCharity = new TrustlessDonation(_donationToken, _donationNFT, msg.sender, charityName);
+        charityContracts[msg.sender] = newCharity;
+        _donationNFT.addValidCharity(address(newCharity)); // update the validCharities mapping in DonationNFT
+        
+        emit CharityCreated(msg.sender, address(newCharity), charityName);
     }
 }
