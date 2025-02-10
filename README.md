@@ -18,58 +18,48 @@ The project is divided into two main components:
 
 ```mermaid
 graph TB
-    subgraph Main Application
-        main[main.py]
-        static[Static Analysis]
+    subgraph "Main Application"
+      main["main.py"]
+      static["Static Analysis (parse_contract & Slither)"]
     end
 
-    subgraph RAG System
-        doc_db[doc_db.py]
-        pinecone[(Pinecone DB)]
-        vuln_json[vulnerability_categories.json]
-        doc_db --> pinecone
-        doc_db --> vuln_json
+    subgraph "RAG System"
+      docdb["rag/doc_db.py"]
+      pinecone["Pinecone DB"]
+      vulnjson["vulnerability_categories.json"]
+      contractVulns["contract_vulns.json"]
     end
 
-    subgraph LLM Agents
-        coordinator[AgentCoordinator]
-        subgraph Agents
-            analyzer[AnalyzerAgent]
-            exploiter[ExploiterAgent]
-            generator[GeneratorAgent]
-        end
-
-        coordinator --> analyzer
-        coordinator --> exploiter
-        coordinator --> generator
+    subgraph "LLM Agents"
+      coordinator["AgentCoordinator"]
+      analyzer["AnalyzerAgent"]
+      exploiter["ExploiterAgent"]
+      generator["GeneratorAgent"]
     end
 
-    %% External Dependencies
-    openai[OpenAI API]
-    slither[Slither Analyzer]
+    openai["OpenAI API"]
+    slither["Slither Analyzer"]
 
     %% Data Flow
     main --> static
-    static -->|Contract Info| coordinator
-    static -->|Call Graph| coordinator
-    static -->|Slither Results| coordinator
-    
-    doc_db -->|Vulnerability Retriever| analyzer
-    vuln_json -->|Category Definitions| analyzer
-    
-    analyzer -->|Vulnerabilities| exploiter
-    exploiter -->|Exploit Plan| generator
-    generator -->|Tx Sequence| main
-    
-    %% Component Interactions
+    static --> contractVulns
+    contractVulns --> docdb
+    docdb --> pinecone
+    docdb --> vulnjson
+
+    static --> slither
+
+    main --> coordinator
+    coordinator --> analyzer
+    coordinator --> exploiter
+    coordinator --> generator
+
+    analyzer --> exploiter
+    exploiter --> generator
+
     analyzer --> openai
     exploiter --> openai
     generator --> openai
-    static --> slither
-
-    class main,static,coordinator,analyzer,exploiter,generator component
-    class openai,slither external
-    class pinecone database
 ```
 
 ## Prerequisites
