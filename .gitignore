@@ -7,8 +7,13 @@
 # Pycache
 static_analysis/scripts/__pycache__
 
+# pyc files
+*.pyc
+
 # Repomix
 repomix-output.txt
 
 # Test files
 static_analysis/test_contracts
+
+
