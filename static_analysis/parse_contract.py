@@ -7,6 +7,7 @@ from .slither_detectors import DETECTORS
 from .call_graph_printer import PrinterCallGraphV2
 from typing import Dict, List
 
+
 def analyze_contract(filepath: str):
     """
     Analyzes a Solidity contract using Slither and returns:
@@ -49,9 +50,11 @@ def analyze_contract(filepath: str):
             end_line = func.source_mapping.end if func.source_mapping else None
 
             # Get functions being called
-            called_functions = [call.name for call in func.internal_calls if not isinstance(call, SolidityFunction)]
-
-
+            called_functions = [
+                call.name
+                for call in func.internal_calls
+                if not isinstance(call, SolidityFunction)
+            ]
 
             # Prepare the function detail dict
             func_detail = {
@@ -63,7 +66,7 @@ def analyze_contract(filepath: str):
                 "start_line": start_line,
                 "end_line": end_line,
                 "called_functions": called_functions,
-                "content": func.source_mapping.content if func.source_mapping else None
+                "content": func.source_mapping.content if func.source_mapping else None,
             }
 
             all_function_details.append(func_detail)
@@ -90,4 +93,4 @@ if __name__ == "__main__":
     # Print call graph
     # Returns the Call Graph formatted for DOT files
     print("==== Call Graph ====")
-    print(cg['all_contracts'])
+    print(cg["all_contracts"])
