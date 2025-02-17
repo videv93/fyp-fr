@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class AnalyzerAgent:
-    def __init__(self, retriever, model_name="gpt-4o"):
+    def __init__(self, retriever, model_name="o1-mini"):
         self.retriever = retriever
         self.model_name = model_name
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -41,18 +41,26 @@ class AnalyzerAgent:
             query_text = self._build_query_text(contract_info)
             relevant_docs = self.retriever.invoke(contract_info["source_code"])
             print("Found", len(relevant_docs), "relevant snippets")
-            # print(relevant_docs)
             # 2) Build the user + system messages
+            # Update system prompt
+
+            all_categories = self.vuln_categories.keys()
             system_prompt = (
-                "You are an expert smart contract security auditor. "
-                "You MUST respond with valid JSON and nothing else. "
-                "No disclaimers, no extra text."
+                "You are an expert smart contract security auditor. You MUST:\n"
+                "1. Check for ALL these vulnerability categories:\n"
+                + "\n".join([f"- {cat}" for cat in all_categories])
+                + "\n2. Pay SPECIAL ATTENTION to categories marked 'HIGH PRIORITY' that match known vulnerabilities\n"
+                "3. Use detection strategies as a guide\n"
+                "4. Return valid JSON with EXACT category names\n"
+                "5. Feel free to invent new categories outside the provided list"
             )
             user_prompt = self._construct_analysis_prompt(contract_info, relevant_docs)
 
             # 3) Call LLM with system + user messages
             print("CALLING Analyzer Agent")
+
             response_text = self._call_llm(system_prompt, user_prompt)
+            print(user_prompt)
 
             # 4) Parse JSON
             vulnerabilities = self._parse_llm_response(response_text)
@@ -123,9 +131,12 @@ class AnalyzerAgent:
             meta = doc.metadata
             lines_range = f"{meta.get('start_line')} - {meta.get('end_line')}"
             cats = meta.get("vuln_categories", [])
-            snippet_text += f"[Snippet] {meta.get('filename','Unknown')} lines {lines_range} cats={cats}\n"
-            snippet_text += doc.page_content[:1500]  # truncated to 1500 chars
-            snippet_text += "\n\n"
+            if len(cats) > 1:
+                snippet_text += f"[Snippet] {meta.get('filename','Unknown')} lines {lines_range} cats={cats}\n"
+                snippet_text += doc.page_content[:1500]  # truncated to 1500 chars
+                snippet_text += "\n\n"
+            else:
+                continue
 
         # Append the detector results insights (if available)
         detector_section = ""
@@ -156,26 +167,16 @@ class AnalyzerAgent:
                 f"Detection Strategy: {guidance['detection_strategy']}\n\n"
             )
 
-        # Update system prompt
-        system_prompt = (
-            "You are an expert smart contract security auditor. You MUST:\n"
-            "1. Check for ALL these vulnerability categories:\n"
-            + "\n".join([f"- {cat}" for cat in all_categories])
-            + "\n2. Pay SPECIAL ATTENTION to categories marked 'HIGH PRIORITY' that match known vulnerabilities\n"
-            "3. Follow detection strategies exactly\n"
-            "4. Return valid JSON with EXACT category names\n"
-            "5. Never invent new categories outside the provided list"
-        )
-
         # Task instructions
         instructions = """\
 TASK:
-1. Systematically check for ALL vulnerability categories below.
+1. Systematically check for ALL vulnerability categories specified earlier.
 2. For HIGH PRIORITY categories (those with matching examples):
    - Compare directly with similar code patterns.
    - Apply detection strategies rigorously.
 3. For other categories:
-   - Perform brief checks based on detection strategies.
+   - Use detection strategies as a guide.
+   - You may use your own judgment to identify potential vulnerabilities.
 4. Format findings as:
 
 {
@@ -196,6 +197,7 @@ TASK:
             + category_guidance
             + snippet_text
             + detector_section
+            + "\n"
             + instructions
         )
         return full_prompt
@@ -207,10 +209,10 @@ TASK:
         resp = self.client.chat.completions.create(
             model=self.model_name,
             messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
+                # {"role": "system", "content": system_prompt},
+                {"role": "user", "content": system_prompt + user_prompt},
             ],
-            temperature=0,
+            # temperature=0,
         )
         return resp.choices[0].message.content.strip()
 

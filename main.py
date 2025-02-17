@@ -49,6 +49,7 @@ def main():
             print(
                 f"  Affected Functions: {', '.join(vuln.get('affected_functions', []) or [])}"
             )
+            print(f" Exploitation Scenario: {vuln.get('exploitation_scenario', 'N/A')}")
     else:
         print("No vulnerabilities found or no results returned.")
 

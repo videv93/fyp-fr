@@ -8,8 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BSCSCAN_API_KEY = os.getenv("BSCSCAN_API_KEY")
-if not BSCSCAN_API_KEY:
-    raise EnvironmentError("BSCSCAN_API_KEY environment variable not set.")
+ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY")
 
 
 def fetch_and_flatten_contract(
@@ -145,7 +144,7 @@ output_path = os.path.join(
 )
 fetch_and_flatten_contract(
     "bsc",
-    "0xF3A6b60BfBb3ce9d69BfAF9ddb61738B4607E8c8",
+    "0x9BDF251435cBC6774c7796632e9C80B233055b93",
     BSCSCAN_API_KEY,
     output_file=output_path,
 )

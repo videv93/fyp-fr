@@ -16,7 +16,9 @@ def analyze_contract(filepath: str):
     """
 
     # Initialize Slither on the given file. This parses and compiles the contract.
-    slither = Slither(filepath)
+    slither = Slither(filepath, solc_args="--via-ir --optimize")
+
+    # slither = Slither(filepath)
     printer = PrinterCallGraphV2(slither, None)
 
     for detector_class in DETECTORS:
