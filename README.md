@@ -19,22 +19,23 @@ The project is divided into two main components:
 ```mermaid
 graph TB
     subgraph "Main Application"
-      main["main.py"]
-      static["Static Analysis (parse_contract & Slither)"]
+        main["main.py"]
+        static["Static Analysis<br/>(parse_contract & Slither)"]
     end
 
     subgraph "RAG System"
-      docdb["rag/doc_db.py"]
-      pinecone["Pinecone DB"]
-      vulnjson["vulnerability_categories.json"]
-      contractVulns["contract_vulns.json"]
+        docdb["rag/doc_db.py"]
+        pinecone["Pinecone DB"]
+        vulnjson["vulnerability_categories.json"]
+        contractVulns["contract_vulns.json"]
     end
 
     subgraph "LLM Agents"
-      coordinator["AgentCoordinator"]
-      analyzer["AnalyzerAgent"]
-      exploiter["ExploiterAgent"]
-      generator["GeneratorAgent"]
+        coordinator["AgentCoordinator"]
+        analyzer["AnalyzerAgent"]
+        skeptic["SkepticAgent"]
+        exploiter["ExploiterAgent"]
+        generator["GeneratorAgent"]
     end
 
     openai["OpenAI API"]
@@ -51,13 +52,16 @@ graph TB
 
     main --> coordinator
     coordinator --> analyzer
+    coordinator --> skeptic
     coordinator --> exploiter
     coordinator --> generator
 
-    analyzer --> exploiter
+    analyzer --> skeptic
+    skeptic --> exploiter
     exploiter --> generator
 
     analyzer --> openai
+    skeptic --> openai
     exploiter --> openai
     generator --> openai
 ```
