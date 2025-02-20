@@ -6,7 +6,6 @@ import json
 from dotenv import load_dotenv
 from static_analysis.parse_contract import analyze_contract
 from llm_agents.agent_coordinator import AgentCoordinator
-from pprint import pprint  # For pretty-printing
 
 
 def main():
@@ -34,50 +33,31 @@ def main():
         "detector_results": detector_results,
     }
 
-    # Use the AgentCoordinator (which loads the Pinecone store from contract_vulns.json)
+    # Use the AgentCoordinator
     coordinator = AgentCoordinator()
     results = coordinator.analyze_contract(contract_info)
 
-    # Print results (existing workflow)
-    print("=== ANALYSIS RESULTS ===")
-    if results.get("vulnerabilities"):
-        for idx, vuln in enumerate(results["vulnerabilities"], start=1):
-            print(f"\nVulnerability {idx}:")
-            print(f"  Type: {vuln.get('vulnerability_type', 'N/A')}")
-            print(f"  Confidence Score: {vuln.get('confidence_score', 'N/A')}")
-            print(f"  Reasoning: {vuln.get('reasoning', 'N/A')}")
-            print(
-                f"  Affected Functions: {', '.join(vuln.get('affected_functions', []) or [])}"
-            )
-            print(f" Exploitation Scenario: {vuln.get('exploitation_scenario', 'N/A')}")
-    else:
-        print("No vulnerabilities found or no results returned.")
-
-    # Print targeted vulnerability, exploit plan, etc.
-    target_vuln = results.get("target_vuln")
-    if target_vuln:
-        print("\n=== TARGETED VULNERABILITY ===")
+    print("=== SKEPTIC RE-CHECKED VULNERABILITIES ===")
+    rechecked = results.get("rechecked_vulnerabilities", [])
+    for idx, v in enumerate(rechecked, start=1):
         print(
-            f"Type: {target_vuln.get('vulnerability_type')}, Score: {target_vuln.get('confidence_score')}"
+            f"\nVuln #{idx}: {v['vulnerability_type']}  (SkepticConfidence={v.get('skeptic_confidence',0)})"
         )
-        print(f"Reasoning: {target_vuln.get('reasoning')}")
-        print(f"Affected: {target_vuln.get('affected_functions')}")
-    else:
-        print("No targeted vulnerability was found.")
+        print(f"Reasoning: {v.get('reasoning','N/A')}")
+        print(f"Validity: {v.get('validity_reasoning','')}")
+        print(f"CODE SNIPPET:\n{v.get('code_snippet','')[:200]}...")  # truncated
+        print("Affected Functions:", v.get("affected_functions", []))
 
-    print("\n=== EXPLOIT PLAN ===")
-    exploit_plan = results.get("exploit_plan")
-    if exploit_plan:
-        print(exploit_plan)
-    else:
-        print("No exploit plan generated.")
-
-    print("\n=== TRANSACTION SEQUENCE ===")
-    tx_sequence = results.get("tx_sequence")
-    if tx_sequence:
-        print(tx_sequence)
-    else:
-        print("No transaction sequence generated.")
+    # Show any PoCs we generated
+    pocs = results.get("generated_pocs", [])
+    print("\n=== GENERATED PoCs FOR HIGH-CONFIDENCE VULNS ===")
+    for pidx, poc in enumerate(pocs, start=1):
+        print(
+            f"\n[PoC {pidx}] Vulnerability: {poc['vulnerability']['vulnerability_type']}"
+        )
+        print(f"SkepticConfidence: {poc['vulnerability'].get('skeptic_confidence', 0)}")
+        print("Exploit Plan:", poc["exploit_plan"])
+        print("Tx Sequence:", poc["tx_sequence"])
 
 
 if __name__ == "__main__":
