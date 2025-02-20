@@ -41,16 +41,18 @@ class AnalyzerAgent:
             # 1) Build query for Pinecone
             query_text = self._build_query_text(contract_info)
             relevant_docs = self.retriever.invoke(contract_info["source_code"])
+            print(f"Found {len(relevant_docs)} relevant docs")
+
             # 2) Build system + user messages
             all_categories = self.vuln_categories.keys()
             system_prompt = (
                 "You are an expert smart contract security auditor. You MUST:\n"
                 "1. Check for ALL these vulnerability categories:\n"
+                "2. You should also check for any other vulnerabilities that may arise based on flaws in business logic.\n"
                 + "\n".join([f"- {cat}" for cat in all_categories])
-                + "\n2. Pay SPECIAL ATTENTION to categories marked 'HIGH PRIORITY' that match known vulnerabilities\n"
-                "3. Use detection strategies as a guide\n"
-                "4. Return valid JSON with EXACT category names\n"
-                "5. Feel free to invent new categories outside the provided list\n"
+                + "\n3. Pay SPECIAL ATTENTION to categories marked 'HIGH PRIORITY' that match known vulnerabilities\n"
+                "4. Use detection strategies as a guide\n"
+                "5. Return valid JSON with EXACT category names\n"
             )
             user_prompt = self._construct_analysis_prompt(contract_info, relevant_docs)
 
@@ -164,6 +166,7 @@ class AnalyzerAgent:
         instructions = """\
 TASK:
 1. Systematically check for ALL vulnerability categories specified.
+2. Systematically check for any other vulnerabilities that may arise due to BUSINESS LOGIC.
 2. Mark categories as (HIGH PRIORITY) if code matches known patterns.
 3. Return all discovered vulnerabilities in the JSON. Do not omit.
 4. Format findings as:
@@ -244,6 +247,7 @@ TASK:
         fn_map = {}
         for fn_detail in contract_info.get("function_details", []):
             fn_name = fn_detail["function"]
+            print(f"Function {fn_name}")
             fn_map[fn_name] = fn_detail.get("content", "")
 
         for vuln in vulnerabilities:

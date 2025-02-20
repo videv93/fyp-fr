@@ -14,9 +14,16 @@ def analyze_contract(filepath: str):
     1. A list of function details (name, visibility, parameters, returns, etc.)
     2. A call graph mapping each function to the functions it calls
     """
-
+    # Define the solc_remaps
+    solc_remaps = [
+        "@openzeppelin=/Users/advait/Desktop/NTU/fyp-fr/static_analysis/node_modules/@openzeppelin"
+    ]
     # Initialize Slither on the given file. This parses and compiles the contract.
-    slither = Slither(filepath, solc_args="--via-ir --optimize")
+    slither = Slither(
+        filepath,
+        solc_args="--via-ir --optimize",
+        solc_remaps=solc_remaps,
+    )
 
     # slither = Slither(filepath)
     printer = PrinterCallGraphV2(slither, None)
