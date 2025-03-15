@@ -154,7 +154,7 @@ Return only the complete Solidity code with no additional explanations.
         os.makedirs("exploit", exist_ok=True)
 
         ts = int(time.time())
-        filename = f"exploit/PoC_{vuln_type}_{ts}.sol"
+        filename = f"exploit/test/PoC_{vuln_type}_{ts}.sol"
         with open(filename, "w", encoding="utf-8") as f:
             f.write(poc_code)
 
@@ -382,7 +382,7 @@ library TokenHelper {
 }
 """
 
-        filename = "exploit/BaseTestWithBalanceLog.sol"
+        filename = "exploit/src/test/basetest.sol"
         with open(filename, "w", encoding="utf-8") as f:
             f.write(basetest_content)
 
