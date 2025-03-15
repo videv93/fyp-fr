@@ -57,6 +57,9 @@ class SkepticAgent:
     - Edge cases in mathematical calculations
     - Parameter bounds and invariant violations
 
+    It is okay to be more confident about business logic flaws, as these arise from pure reasoning from the previous agent.
+    You should carefully evaluate the categorized vulnerabilities as they arrise from pattern matching.
+
     Output JSON exactly in the format:
     {
       "rechecked_vulnerabilities": [

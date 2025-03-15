@@ -144,7 +144,7 @@ output_path = os.path.join(
 )
 fetch_and_flatten_contract(
     "bsc",
-    "0x9BDF251435cBC6774c7796632e9C80B233055b93",
+    "0x109ea28dbdea5e6ec126fbc8c33845dfe812a300",
     BSCSCAN_API_KEY,
     output_file=output_path,
 )

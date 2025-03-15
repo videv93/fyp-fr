@@ -21,7 +21,7 @@ def analyze_contract(filepath: str):
     # Initialize Slither on the given file. This parses and compiles the contract.
     slither = Slither(
         filepath,
-        solc_args="--via-ir --optimize",
+        solc_args="--optimize",
         solc_remaps=solc_remaps,
     )
 
