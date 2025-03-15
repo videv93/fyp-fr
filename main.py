@@ -26,6 +26,12 @@ def parse_arguments():
     parser.add_argument("--contract", default="static_analysis/test_contracts/sample3.sol", 
                       help="Path to contract file to analyze")
     
+    # Add auto-run options
+    parser.add_argument("--no-auto-run", action="store_true", 
+                      help="Disable automatic execution of generated PoCs")
+    parser.add_argument("--max-retries", type=int, default=3,
+                      help="Maximum number of fix attempts for failed tests (default: 3)")
+    
     return parser.parse_args()
 
 def main():
@@ -104,7 +110,20 @@ def main():
     # Run LLM analysis
     print_header("Running LLM Analysis")
     coordinator = AgentCoordinator(model_config=model_config)
-    results = coordinator.analyze_contract(contract_info)
+    
+    # Pass auto-run configuration
+    auto_run_config = {
+        "auto_run": not args.no_auto_run,
+        "max_retries": args.max_retries
+    }
+    
+    # Display auto-run settings
+    if not args.no_auto_run:
+        print_step(f"Auto-run enabled with max {args.max_retries} fix attempts")
+    else:
+        print_step("Auto-run disabled, PoCs will be generated but not executed")
+    
+    results = coordinator.analyze_contract(contract_info, auto_run_config=auto_run_config)
 
     # Print results
     print_header("Analysis Results")
@@ -171,8 +190,25 @@ def main():
                 poc_data = poc["poc_data"]
                 console.print("\n[bold]Generated Proof of Concept:[/bold]")
                 console.print(f"File: [green]{poc_data.get('exploit_file', 'N/A')}[/green]")
-                console.print(f"Execution: [blue]{poc_data.get('execution_command', 'N/A')}[/blue]")
-                console.print("[dim]Use the file with Foundry to run the test and verify the vulnerability[/dim]")
+                
+                # Show execution results if available
+                if "execution_results" in poc_data:
+                    results = poc_data["execution_results"]
+                    if results.get("success"):
+                        console.print(f"Execution: [bold green]SUCCESS[/bold green] ✓")
+                    else:
+                        if results.get("retries", 0) > 0:
+                            console.print(f"Execution: [bold yellow]FAILED[/bold yellow] after {results.get('retries')} fix attempts ⚠")
+                        else:
+                            console.print(f"Execution: [bold red]FAILED[/bold red] ✗")
+                        
+                        # Show error details if we have them
+                        if results.get("error"):
+                            console.print(f"[dim]Error: {results.get('error')[:200]}...[/dim]")
+                else:
+                    # Fallback if no execution results
+                    console.print(f"Execution Command: [blue]{poc_data.get('execution_command', 'N/A')}[/blue]")
+                    console.print("[dim]The test was generated but not automatically executed[/dim]")
 
 if __name__ == "__main__":
     main()

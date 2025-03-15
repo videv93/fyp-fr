@@ -173,6 +173,15 @@ graph TB
    python main.py --api-base https://your-proxy.com/v1 --all-models gpt-4
    ```
 
+   Auto-run execution options:
+   ```bash
+   # Disable automatic execution of PoCs
+   python main.py --no-auto-run --contract path/to/your/contract.sol
+
+   # Set maximum number of fix attempts for failing tests
+   python main.py --max-retries 5 --contract path/to/your/contract.sol
+   ```
+
    The script will:
 
    - Parse the Solidity contract using Slither.
@@ -183,6 +192,26 @@ graph TB
 4. **View Results**
 
    The analysis results will be printed to the console, detailing detected vulnerabilities, confidence scores, reasoning, and suggested exploit transactions.
+
+## Automatic PoC Execution and Fixing
+
+The system includes a self-correction mechanism for generated proof-of-concept exploits:
+
+### Features
+- **Auto-run**: Automatically executes generated PoC tests after creation
+- **Error Detection**: Intelligently identifies and extracts error information from test failures
+- **Self-correction**: Uses the same LLM to fix broken test code based on error messages
+- **Multiple Retries**: Attempts up to 3 fixes by default (configurable with `--max-retries`)
+- **Detailed Reporting**: Reports execution status, error messages, and fix attempts
+
+### Troubleshooting Common Issues
+The system automatically addresses common errors in generated tests:
+- Missing funds for transactions (adding vm.deal statements)
+- Incorrect function calls or parameters
+- Arithmetic errors like overflow/underflow
+- State inconsistencies across transactions
+- Solidity version compatibility issues
+- Import errors and contract initialization problems
 
 ## Supported Models
 

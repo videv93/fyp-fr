@@ -12,9 +12,10 @@ from .agents.analyzer import AnalyzerAgent
 from .agents.exploiter import ExploiterAgent
 from .agents.generator import GeneratorAgent
 from .agents.skeptic import SkepticAgent
+from .agents.runner import ExploitRunner
 from .config import ModelConfig
 
-from utils.print_utils import print_step
+from utils.print_utils import print_step, print_success, print_warning
 
 class AgentCoordinator:
     def __init__(self, model_config=None):
@@ -37,10 +38,18 @@ class AgentCoordinator:
         self.skeptic = SkepticAgent(model_config=self.model_config)
         self.exploiter = ExploiterAgent(model_config=self.model_config)
         self.generator = GeneratorAgent(model_config=self.model_config)
+        self.runner = ExploitRunner(model_config=self.model_config)
 
-    def analyze_contract(self, contract_info: Dict) -> Dict:
+    def analyze_contract(self, contract_info: Dict, auto_run_config: Dict = None) -> Dict:
         from rich.console import Console
         console = Console()
+        
+        # Set default auto-run config if none provided
+        if auto_run_config is None:
+            auto_run_config = {"auto_run": True, "max_retries": 3}
+        
+        # Configure runner's max retries
+        self.runner.max_retries = auto_run_config.get("max_retries", 3)
         
         # 1. Analyzer => all vulnerabilities
         console.print("[bold blue]🔍 AnalyzerAgent: Starting initial vulnerability detection...[/bold blue]")
@@ -87,6 +96,31 @@ class AgentCoordinator:
                     
                 # Generate the PoC for this vulnerability
                 poc_data = self.generator.generate(plan_data)
+                
+                # Run and fix the exploit if auto-run is enabled
+                if auto_run_config.get("auto_run", True):
+                    console.print(f"\n[bold blue]🔍 ExploitRunner: Testing and fixing PoC...[/bold blue]")
+                    run_result = self.runner.run_and_fix_exploit(poc_data)
+                    
+                    if run_result.get("success"):
+                        console.print(f"[bold green]✓ Test executed successfully![/bold green]")
+                    else:
+                        if run_result.get("retries") > 0:
+                            console.print(f"[bold yellow]⚠ Test failed after {run_result.get('retries')} fix attempts[/bold yellow]")
+                            console.print(f"[dim]Error: {run_result.get('error', 'Unknown error')}[/dim]")
+                        else:
+                            console.print(f"[bold red]✗ Test failed and could not be fixed[/bold red]")
+                            console.print(f"[dim]Error: {run_result.get('error', 'Unknown error')}[/dim]")
+                    
+                    # Add execution results to the PoC data
+                    poc_data["execution_results"] = {
+                        "success": run_result.get("success", False),
+                        "retries": run_result.get("retries", 0),
+                        "error": run_result.get("error", ""),
+                        "output": run_result.get("output", "")[:500]  # Truncate long outputs
+                    }
+                else:
+                    console.print(f"[dim]Auto-run disabled. Test generated but not executed.[/dim]")
                 
                 generated_pocs.append({
                     "vulnerability": vul,

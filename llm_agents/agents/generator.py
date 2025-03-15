@@ -37,11 +37,16 @@ class GeneratorAgent:
 
         # Save the contract to a file
         filename = self.save_poc_locally(contract_code, vuln_type)
+        filename_for_command = filename
+
+        filename_parts = filename.split("/", 1)
+        if len(filename_parts) > 1:
+            filename_for_command = '.' + '/' + filename_parts[1]
 
         return {
             "exploit_code": contract_code,
             "exploit_file": filename,
-            "execution_command": f"forge test -vv --match-path {filename}"
+            "execution_command": f"forge test -vv --match-path {filename_for_command}"
         }
 
     def generate_poc_contract(self, vulnerability_info: Dict, exploit_plan: Dict) -> str:
@@ -89,7 +94,7 @@ Validation Steps:
 {validation_steps}
 
 IMPORTANT FOUNDRY TEST REQUIREMENTS:
-1. Import basetest.sol from the current directory: `import "../basetest.sol";`
+1. Import basetest.sol from the current directory: `import "./basetest.sol";`
 2. Your contract must extend BaseTestWithBalanceLog: `contract YourTest is BaseTestWithBalanceLog`
 3. In the setUp() function, ensure the test contract has enough ETH: `vm.deal(address(this), 100 ether);`
 4. Use the balanceLog modifier on your test function: `function testExploit() public balanceLog`
