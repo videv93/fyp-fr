@@ -3,14 +3,37 @@
 # ==============================
 import os
 import json
+import argparse
 from dotenv import load_dotenv
 from static_analysis.parse_contract import analyze_contract
 from llm_agents.agent_coordinator import AgentCoordinator
+from llm_agents.config import ModelConfig
 from utils.print_utils import *
+
+def parse_arguments():
+    """Parse command line arguments for model configuration"""
+    parser = argparse.ArgumentParser(description="Smart Contract Vulnerability Analyzer")
+    
+    # Add model configuration arguments
+    parser.add_argument("--analyzer-model", default="o1-mini", help="Model for analyzer agent")
+    parser.add_argument("--skeptic-model", default="o1-mini", help="Model for skeptic agent")
+    parser.add_argument("--exploiter-model", default="o1-mini", help="Model for exploiter agent")
+    parser.add_argument("--generator-model", default="o1-mini", help="Model for generator agent")
+    parser.add_argument("--all-models", help="Use this model for all agents")
+    parser.add_argument("--api-base", help="Base URL for OpenAI API")
+    
+    # Add contract file option
+    parser.add_argument("--contract", default="static_analysis/test_contracts/sample3.sol", 
+                      help="Path to contract file to analyze")
+    
+    return parser.parse_args()
 
 def main():
     print_header("Smart Contract Vulnerability Analyzer")
-
+    
+    # Parse command line arguments
+    args = parse_arguments()
+    
     # Check environment
     try:
         load_dotenv()
@@ -20,9 +43,38 @@ def main():
     except Exception as e:
         print_error(f"Environment setup failed: {str(e)}")
         return
+    
+    # Setup model configuration
+    if args.all_models:
+        # Use the same model for all agents if --all-models is specified
+        model_config = ModelConfig(
+            analyzer_model=args.all_models,
+            skeptic_model=args.all_models,
+            exploiter_model=args.all_models,
+            generator_model=args.all_models,
+            base_url=args.api_base
+        )
+    else:
+        # Use individual model specifications
+        model_config = ModelConfig(
+            analyzer_model=args.analyzer_model,
+            skeptic_model=args.skeptic_model,
+            exploiter_model=args.exploiter_model,
+            generator_model=args.generator_model,
+            base_url=args.api_base
+        )
+    
+    # Display model configuration
+    print_step("Model Configuration:")
+    console.print(f"  Analyzer: [bold]{model_config.analyzer_model}[/bold]")
+    console.print(f"  Skeptic: [bold]{model_config.skeptic_model}[/bold]")
+    console.print(f"  Exploiter: [bold]{model_config.exploiter_model}[/bold]")
+    console.print(f"  Generator: [bold]{model_config.generator_model}[/bold]")
+    if args.api_base:
+        console.print(f"  API Base URL: [dim]{args.api_base}[/dim]")
 
     # Load and analyze contract
-    filepath = "static_analysis/test_contracts/sample2.sol"
+    filepath = args.contract
     print_step(f"Analyzing contract: {filepath}")
 
     # Static Analysis
@@ -51,7 +103,7 @@ def main():
 
     # Run LLM analysis
     print_header("Running LLM Analysis")
-    coordinator = AgentCoordinator()
+    coordinator = AgentCoordinator(model_config=model_config)
     results = coordinator.analyze_contract(contract_info)
 
     # Print results
@@ -113,7 +165,7 @@ def main():
             # If no steps found with the proper structure
             if not (setup_steps or execution_steps or validation_steps):
                 console.print("[italic]No detailed steps available[/italic]")
-                
+
             # Display PoC information
             if "poc_data" in poc:
                 poc_data = poc["poc_data"]

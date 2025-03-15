@@ -8,8 +8,15 @@ from openai import OpenAI
 from utils.print_utils import create_progress_spinner, print_warning, print_success
 
 class GeneratorAgent:
-    def __init__(self):
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    def __init__(self, model_config=None):
+        from ..config import ModelConfig
+
+        self.model_config = model_config or ModelConfig()
+        self.model_name = self.model_config.get_model("generator")
+        self.client = OpenAI(
+            api_key=os.getenv("OPENAI_API_KEY"),
+            **self.model_config.get_openai_args()
+        )
 
     def generate(self, exploit_plan: Dict) -> Dict:
         """
@@ -105,10 +112,21 @@ Remember this is for educational and defensive purposes only. The goal is to hel
 Return only the complete Solidity code with no additional explanations.
 """
 
+        # Create appropriate messages based on model type
+        if self.model_config.supports_reasoning(self.model_name):
+            messages = [
+                {"role": "system", "content": "You are a smart contract security educator creating educational PoC tests."},
+                {"role": "user", "content": prompt}
+            ]
+        else:
+            messages = [
+                {"role": "user", "content": prompt}
+            ]
+
         response = self.client.chat.completions.create(
-            model="o1-mini",
-            messages=[{"role": "user", "content": prompt}],
-            # temperature=0.2,
+            model=self.model_name,
+            messages=messages,
+            # temperature=0.2,  # Lower temperature for more consistent code generation
         )
 
         # Extract the code from the response

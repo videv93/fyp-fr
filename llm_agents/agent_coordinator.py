@@ -11,12 +11,21 @@ from rag.doc_db import get_vuln_retriever_from_json
 from .agents.analyzer import AnalyzerAgent
 from .agents.exploiter import ExploiterAgent
 from .agents.generator import GeneratorAgent
-from .agents.skeptic import SkepticAgent  # ADDED
+from .agents.skeptic import SkepticAgent
+from .config import ModelConfig
 
 from utils.print_utils import print_step
 
 class AgentCoordinator:
-    def __init__(self):
+    def __init__(self, model_config=None):
+        """
+        Initialize the agent coordinator with configurable models.
+        
+        Args:
+            model_config: Optional ModelConfig instance. If None, default config will be used.
+        """
+        self.model_config = model_config or ModelConfig()
+        
         self.vuln_retriever = get_vuln_retriever_from_json(
             json_path="known_vulnerabilities/contract_vulns.json",
             base_dataset_dir="known_vulnerabilities",
@@ -24,10 +33,10 @@ class AgentCoordinator:
             top_k=3,
         )
 
-        self.analyzer = AnalyzerAgent(self.vuln_retriever)
-        self.skeptic = SkepticAgent()  # ADDED
-        self.exploiter = ExploiterAgent()
-        self.generator = GeneratorAgent()
+        self.analyzer = AnalyzerAgent(self.vuln_retriever, model_config=self.model_config)
+        self.skeptic = SkepticAgent(model_config=self.model_config)
+        self.exploiter = ExploiterAgent(model_config=self.model_config)
+        self.generator = GeneratorAgent(model_config=self.model_config)
 
     def analyze_contract(self, contract_info: Dict) -> Dict:
         from rich.console import Console

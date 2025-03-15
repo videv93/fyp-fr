@@ -14,10 +14,16 @@ logger = logging.getLogger(__name__)
 
 
 class AnalyzerAgent:
-    def __init__(self, retriever, model_name="o1-mini"):
+    def __init__(self, retriever, model_config=None):
+        from ..config import ModelConfig
+
         self.retriever = retriever
-        self.model_name = model_name
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.model_config = model_config or ModelConfig()
+        self.model_name = self.model_config.get_model("analyzer")
+        self.client = OpenAI(
+            api_key=os.getenv("OPENAI_API_KEY"),
+            **self.model_config.get_openai_args()
+        )
         # Load vulnerability categories
         self.vuln_categories = self._load_vuln_categories()
 
@@ -183,7 +189,7 @@ TASK:
    - State manipulation across transactions
    - Edge cases in mathematical formulas
    - Governance or access control loopholes
-   - Transaction ordering dependencies 
+   - Transaction ordering dependencies
 
 4. Mark categories as (HIGH PRIORITY) only if you're confident the issue is exploitable.
 
@@ -219,14 +225,24 @@ Format findings as:
 
     def _call_llm(self, system_prompt: str, user_prompt: str) -> str:
         """
-        Use openai.ChatCompletion with a single big user message
-        (you can do system+user if you wish).
+        Use openai.ChatCompletion with the appropriate messaging structure based on model type.
         """
+        # Create messages list based on model capabilities
+        if self.model_config.supports_reasoning(self.model_name):
+            # For models that support reasoning-style prompts (Claude, GPT-4, etc.)
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+        else:
+            # For simpler models (o1-mini, etc.), combine system and user prompts
+            messages = [
+                {"role": "user", "content": system_prompt + "\n\n" + user_prompt}
+            ]
+
         resp = self.client.chat.completions.create(
             model=self.model_name,
-            messages=[
-                {"role": "user", "content": system_prompt + "\n\n" + user_prompt},
-            ],
+            messages=messages,
         )
         return resp.choices[0].message.content.strip()
 
@@ -284,12 +300,12 @@ Format findings as:
         for vuln in vulnerabilities:
             snippet_list = []
             affected_fns = vuln.get("affected_functions", [])
-            
+
             # First try direct matches from function map
             for fn_name in affected_fns:
                 if code_snip := fn_map.get(fn_name):
                     snippet_list.append(code_snip)
-            
+
             # Set the code snippet
             if snippet_list:
                 vuln["code_snippet"] = "\n\n".join(snippet_list)
@@ -300,7 +316,7 @@ Format findings as:
                     for fn_name in affected_fns:
                         # Extract function name without contract prefix
                         simple_fn_name = fn_name.split('.')[-1] if '.' in fn_name else fn_name
-                        
+
                         # Find in source code directly - basic approach
                         lines = source_code.split('\n')
                         for i, line in enumerate(lines):

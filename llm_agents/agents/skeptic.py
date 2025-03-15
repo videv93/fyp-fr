@@ -13,8 +13,15 @@ class SkepticAgent:
     It outputs a re-ranked or filtered list of vulnerabilities, sorted from highest to lowest confidence.
     """
 
-    def __init__(self):
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    def __init__(self, model_config=None):
+        from ..config import ModelConfig
+
+        self.model_config = model_config or ModelConfig()
+        self.model_name = self.model_config.get_model("skeptic")
+        self.client = OpenAI(
+            api_key=os.getenv("OPENAI_API_KEY"),
+            **self.model_config.get_openai_args()
+        )
 
     def audit_vulnerabilities(self, contract_source: str, vulnerabilities: list) -> list:
         if not vulnerabilities:
@@ -26,14 +33,14 @@ class SkepticAgent:
             # Build prompts
             system_prompt = """You are a highly critical, business-focused Smart Contract Security Auditor with real-world exploit experience.
     Your role is to carefully evaluate initial vulnerability findings and provide a balanced assessment of their severity and exploitability.
-    
+
     Consider these factors when reviewing each vulnerability:
     1. Business logic context - How does this vulnerability interact with the specific business purpose of this contract?
     2. Preconditions - What conditions must be met for this to be exploited?
     3. Practical impact - What would be the consequence if exploited?
     4. Implementation details - Is the code actually vulnerable in the way described?
     5. Common vulnerability patterns - Does this match known vulnerability patterns?
-    
+
     For each alleged vulnerability, determine:
       1) Is it a genuine vulnerability that warrants attention?
       2) Give a REASONABLE confidence score using these guidelines:
@@ -42,7 +49,7 @@ class SkepticAgent:
          - 0.6-0.8: Likely a genuine concern requiring attention
          - 0.9-1.0: Critical vulnerability with high certainty
       3) Provide clear reasoning that supports your confidence score
-    
+
     Especially look for subtle business logic flaws that automated tools or pattern-matching might miss:
     - Economic manipulation (arbitrage, price manipulation)
     - Logical sequence exploits (state manipulation across transactions)
@@ -71,10 +78,20 @@ class SkepticAgent:
             user_prompt += """Please re-check each vulnerability from #0, #1, #2, etc.
     Return a JSON object with the final verdict.
     """
-            # Call LLM
+            # Call LLM with appropriate message structure
+            if self.model_config.supports_reasoning(self.model_name):
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ]
+            else:
+                messages = [
+                    {"role": "user", "content": system_prompt + user_prompt}
+                ]
+
             response = self.client.chat.completions.create(
-                model="o1-mini",
-                messages=[{"role": "user", "content": system_prompt + user_prompt}],
+                model=self.model_name,
+                messages=messages,
             )
             text_out = response.choices[0].message.content.strip()
 

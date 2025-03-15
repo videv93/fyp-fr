@@ -6,8 +6,9 @@ This project utilises a multi-agent workflow to identify vulnerabilities and gen
 
 - **Static Analysis**: Utilizes Slither to parse and analyze Solidity contracts, extracting function details and generating call graphs.
 - **Knowledge Base**: Stores vulnerability information using FAISS for efficient similarity searches, enabling contextual analysis.
-- **LLM Integration**: Employs OpenAI's GPT Models to analyze detected vulnerabilities and propose exploit strategies.
+- **LLM Integration**: Supports multiple LLM providers (OpenAI, Anthropic, Ollama) with automatic prompt format optimization.
 - **Agent Coordination**: Coordinates between analysis agents to provide comprehensive vulnerability assessments and exploit recommendations.
+- **Model Flexibility**: Configure different models for each agent based on task complexity and performance requirements.
 
 ## Architecture
 
@@ -150,8 +151,26 @@ graph TB
 
    Execute the main script to perform static analysis and vulnerability assessment:
 
+   Basic usage with default models (o1-mini):
    ```bash
-   python main.py
+   python main.py --contract path/to/your/contract.sol
+   ```
+
+   Configure which models to use for each agent:
+   ```bash
+   # Use the same model for all agents
+   python main.py --all-models gpt-4o --contract path/to/your/contract.sol
+
+   # Configure individual agents with different models
+   python main.py \
+     --analyzer-model gpt-4o \
+     --skeptic-model gpt-3.5-turbo \
+     --exploiter-model claude-3-haiku-20240307 \
+     --generator-model o1-preview \
+     --contract path/to/your/contract.sol
+
+   # Configure API base URL (useful for proxies)
+   python main.py --api-base https://your-proxy.com/v1 --all-models gpt-4
    ```
 
    The script will:
@@ -164,3 +183,19 @@ graph TB
 4. **View Results**
 
    The analysis results will be printed to the console, detailing detected vulnerabilities, confidence scores, reasoning, and suggested exploit transactions.
+
+## Supported Models
+
+The system automatically adapts prompt structures based on model capabilities:
+
+### Reasoning-capable Models
+These models support system/user message separation and complex reasoning:
+- OpenAI: gpt-3.5-turbo, gpt-4, gpt-4-turbo, gpt-4o
+- Anthropic: claude-3-opus-20240229, claude-3-sonnet-20240229, claude-3-haiku-20240307
+- Ollama: o1-preview
+
+### Simple Models
+These models work best with direct prompting:
+- Ollama: o1-mini
+
+To add support for additional models, update the `is_reasoning_model` dictionary in `llm_agents/config.py`.
