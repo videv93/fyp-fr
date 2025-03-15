@@ -43,13 +43,19 @@ class AnalyzerAgent:
 
                 all_categories = self.vuln_categories.keys()
                 system_prompt = (
-                    "You are an expert smart contract security auditor. You MUST:\n"
-                    "1. Check for ALL these vulnerability categories:\n"
-                    "2. You should also check for any other vulnerabilities that may arise based on flaws in business logic.\n"
+                    "You are an expert smart contract security auditor with deep knowledge of DeFi protocols, web3 security, and Solidity. You MUST:\n"
+                    "1. First INDEPENDENTLY analyze the contract without relying on prior knowledge - use first principles reasoning\n"
+                    "2. After independent analysis, check for all these vulnerability categories:\n"
                     + "\n".join([f"- {cat}" for cat in all_categories])
-                    + "\n3. Pay SPECIAL ATTENTION to categories marked 'HIGH PRIORITY' that match known vulnerabilities\n"
-                    "4. Use detection strategies as a guide\n"
-                    "5. Return valid JSON with EXACT category names\n"
+                    + "\n3. Pay equal attention to BUSINESS LOGIC FLAWS that might not fit standard categories\n"
+                    "4. Consider how contract mechanisms can be manipulated for profit, especially:\n"
+                    "   - Transaction ordering manipulation (MEV, frontrunning, sandwiching)\n"
+                    "   - Economic attacks (price manipulation, flash loans, arbitrage)\n"
+                    "   - Governance manipulation (voting, delegation attacks)\n"
+                    "   - Access control issues or privileges that can be abused\n"
+                    "   - Mathematical invariants that can be broken\n"
+                    "5. Only after independent analysis, consider detection strategies from examples as supplementary guidance\n"
+                    "6. Return valid JSON with EXACT category names, but also include 'business_logic' for novel attack vectors\n"
                 )
                 user_prompt = self._construct_analysis_prompt(contract_info, relevant_docs)
 
@@ -163,20 +169,39 @@ class AnalyzerAgent:
         # Task instructions
         instructions = """\
 TASK:
-1. Systematically check for ALL vulnerability categories specified.
-2. Systematically check for any other vulnerabilities that may arise due to BUSINESS LOGIC.
-2. Mark categories as (HIGH PRIORITY) if code matches known patterns.
-3. Return all discovered vulnerabilities in the JSON. Do not omit.
-4. Format findings as:
+1. First conduct a THOROUGH, INDEPENDENT security review of the contract without relying on examples.
+   - Review state variables, initialization, access control
+   - Examine value flows (ETH and tokens) for manipulation points
+   - Identify privilege escalation possibilities
+   - Check mathematical operations for precision loss or overflow/underflow
+   - Analyze external calls and their security implications
+
+2. After independent analysis, systematically check for ALL vulnerability categories specified.
+
+3. Prioritize BUSINESS LOGIC FLAWS that might be unique to this contract:
+   - Economic incentive misalignments
+   - State manipulation across transactions
+   - Edge cases in mathematical formulas
+   - Governance or access control loopholes
+   - Transaction ordering dependencies 
+
+4. Mark categories as (HIGH PRIORITY) only if you're confident the issue is exploitable.
+
+5. Return all discovered vulnerabilities in the JSON with detailed reasoning.
+   - For business logic flaws, use "business_logic" as the vulnerability_type
+   - Include specific exploitation scenarios that are realistic
+   - Assign confidence scores honestly (prefer false negatives to false positives)
+
+Format findings as:
 
 {
   "vulnerabilities": [{
       "vulnerability_type": "EXACT_CATEGORY_NAME",
       "confidence_score": 0.0-1.0,
-      "reasoning": "Specific pattern match and analysis steps",
+      "reasoning": "Detailed analysis showing why this is a vulnerability",
       "affected_functions": ["..."],
-      "impact": "...",
-      "exploitation_scenario": "..."
+      "impact": "Specific consequences if exploited",
+      "exploitation_scenario": "Step-by-step realistic attack scenario"
   }, ...]
 }
 """

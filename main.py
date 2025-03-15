@@ -22,7 +22,7 @@ def main():
         return
 
     # Load and analyze contract
-    filepath = "static_analysis/test_contracts/sample.sol"
+    filepath = "static_analysis/test_contracts/sample2.sol"
     print_step(f"Analyzing contract: {filepath}")
 
     # Static Analysis
@@ -89,30 +89,38 @@ def main():
             console.print(f"\n[bold]PoC #{pidx}[/bold] - {vuln['vulnerability_type']}")
             console.print(f"Confidence: {vuln.get('skeptic_confidence', 0):.2f}")
             console.print("\nExploit Plan:")
-            
+
             # Get all step types from the exploit plan
             setup_steps = poc["exploit_plan"].get("setup_steps", [])
             execution_steps = poc["exploit_plan"].get("execution_steps", [])
             validation_steps = poc["exploit_plan"].get("validation_steps", [])
-            
+
             if setup_steps:
                 console.print("[bold]Setup:[/bold]")
                 for step in setup_steps:
                     console.print(f"• {step}")
-                    
+
             if execution_steps:
                 console.print("[bold]Execution:[/bold]")
                 for step in execution_steps:
                     console.print(f"• {step}")
-                    
+
             if validation_steps:
                 console.print("[bold]Validation:[/bold]")
                 for step in validation_steps:
                     console.print(f"• {step}")
-                
+
             # If no steps found with the proper structure
             if not (setup_steps or execution_steps or validation_steps):
                 console.print("[italic]No detailed steps available[/italic]")
+                
+            # Display PoC information
+            if "poc_data" in poc:
+                poc_data = poc["poc_data"]
+                console.print("\n[bold]Generated Proof of Concept:[/bold]")
+                console.print(f"File: [green]{poc_data.get('exploit_file', 'N/A')}[/green]")
+                console.print(f"Execution: [blue]{poc_data.get('execution_command', 'N/A')}[/blue]")
+                console.print("[dim]Use the file with Foundry to run the test and verify the vulnerability[/dim]")
 
 if __name__ == "__main__":
     main()

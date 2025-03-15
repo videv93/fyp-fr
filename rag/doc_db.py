@@ -12,6 +12,8 @@ from langchain_openai import OpenAIEmbeddings
 from langchain.text_splitter import TokenTextSplitter
 from langchain_community.vectorstores import Pinecone
 
+from utils.print_utils import create_progress_bar, print_step
+
 load_dotenv()
 
 
@@ -150,6 +152,7 @@ def build_pinecone_vectorstore_from_json(
     5) Return the VectorStore
     """
     # Ensure Pinecone index is set up
+    print_step("Initializing Pinecone...")
     init_pinecone_index(index_name=index_name)
 
     # Initialize Pinecone client
@@ -171,35 +174,40 @@ def build_pinecone_vectorstore_from_json(
     vuln_data = load_json_vulns(json_path)
     all_docs = []
 
-    for cdata in vuln_data:
-        full_path = os.path.join(base_dataset_dir, cdata["path"])
-        if not os.path.isfile(full_path):
-            print(f"Warning: File not found: {full_path}. Skipping.")
-            continue
+    with create_progress_bar("Processing contracts") as progress:
+        task = progress.add_task("Processing...", total=len(vuln_data))
 
-        # Load the entire .sol contract
-        with open(full_path, "r", encoding="utf-8") as f:
-            sol_code = f.read()
+        for cdata in vuln_data:
+            full_path = os.path.join(base_dataset_dir, cdata["path"])
+            if not os.path.isfile(full_path):
+                print(f"Warning: File not found: {full_path}. Skipping.")
+                continue
 
-        # Build a line->categories map
-        line_vulns_map = {}
-        for vuln_item in cdata.get("vulnerabilities", []):
-            cat = vuln_item["category"]
-            for ln in vuln_item["lines"]:
-                line_vulns_map.setdefault(ln, []).append(cat)
+            # Load the entire .sol contract
+            with open(full_path, "r", encoding="utf-8") as f:
+                sol_code = f.read()
 
-        # Create chunked Documents
-        doc_list = chunk_contract_with_metadata(
-            sol_code,
-            line_vulns_map,
-            filename=cdata.get("name", ""),
-            pragma=cdata.get("pragma", ""),
-            source=cdata.get("source", ""),
-        )
+            # Build a line->categories map
+            line_vulns_map = {}
+            for vuln_item in cdata.get("vulnerabilities", []):
+                cat = vuln_item["category"]
+                for ln in vuln_item["lines"]:
+                    line_vulns_map.setdefault(ln, []).append(cat)
 
-        all_docs.extend(doc_list)
+            # Create chunked Documents
+            doc_list = chunk_contract_with_metadata(
+                sol_code,
+                line_vulns_map,
+                filename=cdata.get("name", ""),
+                pragma=cdata.get("pragma", ""),
+                source=cdata.get("source", ""),
+            )
+
+            all_docs.extend(doc_list)
+            progress.update(task, advance=1)
 
     print(f"Total chunked documents: {len(all_docs)}")
+    print_step(f"Uploading {len(all_docs)} documents to Pinecone...")
 
     # Create embeddings
     embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))

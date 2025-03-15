@@ -24,12 +24,31 @@ class SkepticAgent:
             task = progress.add_task("Analyzing...")
 
             # Build prompts
-            system_prompt = """You are a strict, detail-oriented Smart Contract Security Auditor.
-    You are given a contract's source code and an alleged set of vulnerabilities.
-    For each alleged vulnerability, decide:
-      1) Is it likely real or a false positive?
-      2) Give a confidence score from 0.0 to 1.0. (0.0 = false positive, 1.0 = real)
-      3) Provide a short justification.
+            system_prompt = """You are a highly critical, business-focused Smart Contract Security Auditor with real-world exploit experience.
+    Your role is to carefully evaluate initial vulnerability findings and provide a balanced assessment of their severity and exploitability.
+    
+    Consider these factors when reviewing each vulnerability:
+    1. Business logic context - How does this vulnerability interact with the specific business purpose of this contract?
+    2. Preconditions - What conditions must be met for this to be exploited?
+    3. Practical impact - What would be the consequence if exploited?
+    4. Implementation details - Is the code actually vulnerable in the way described?
+    5. Common vulnerability patterns - Does this match known vulnerability patterns?
+    
+    For each alleged vulnerability, determine:
+      1) Is it a genuine vulnerability that warrants attention?
+      2) Give a REASONABLE confidence score using these guidelines:
+         - 0.0-0.2: Definitely not a vulnerability / false positive
+         - 0.3-0.5: Unlikely to be exploitable but worth noting
+         - 0.6-0.8: Likely a genuine concern requiring attention
+         - 0.9-1.0: Critical vulnerability with high certainty
+      3) Provide clear reasoning that supports your confidence score
+    
+    Especially look for subtle business logic flaws that automated tools or pattern-matching might miss:
+    - Economic manipulation (arbitrage, price manipulation)
+    - Logical sequence exploits (state manipulation across transactions)
+    - Trust assumptions that conflict with incentives
+    - Edge cases in mathematical calculations
+    - Parameter bounds and invariant violations
 
     Output JSON exactly in the format:
     {
