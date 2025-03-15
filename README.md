@@ -18,48 +18,70 @@ The project is divided into two main components:
 
 ```mermaid
 graph TB
-    subgraph "Main Application"
-      main["main.py"]
-      static["Static Analysis (parse_contract & Slither)"]
+    subgraph "Core Application"
+        main["main.py"]
+        static["Static Analysis"]
+        parse["parse_contract.py"]
+        slither["Slither Detectors"]
     end
 
-    subgraph "RAG System"
-      docdb["rag/doc_db.py"]
-      pinecone["Pinecone DB"]
-      vulnjson["vulnerability_categories.json"]
-      contractVulns["contract_vulns.json"]
+    subgraph "Knowledge Base"
+        docdb["RAG System<br/>doc_db.py"]
+        pinecone["Pinecone Vector DB"]
+        vulncat["vulnerability_categories.json"]
     end
 
     subgraph "LLM Agents"
-      coordinator["AgentCoordinator"]
-      analyzer["AnalyzerAgent"]
-      exploiter["ExploiterAgent"]
-      generator["GeneratorAgent"]
+        coord["AgentCoordinator"]
+
+        subgraph "Analysis Pipeline"
+            analyzer["AnalyzerAgent<br/>(Initial Detection)"]
+            skeptic["SkepticAgent<br/>(Validation)"]
+            exploiter["ExploiterAgent<br/>(Exploit Planning)"]
+            generator["GeneratorAgent<br/>(PoC Generation)"]
+        end
     end
 
-    openai["OpenAI API"]
-    slither["Slither Analyzer"]
+    subgraph "Utilities"
+        print["print_utils.py"]
+        fetcher["source_code_fetcher.py"]
+    end
 
-    %% Data Flow
+    subgraph "External Services"
+        openai["OpenAI API"]
+        blockchain["Blockchain Explorers<br/>(Etherscan/BSCScan)"]
+    end
+
+    %% Main Data Flow
     main --> static
-    static --> contractVulns
-    contractVulns --> docdb
+    static --> parse
+    parse --> slither
+
+    %% Knowledge Base Flow
+    vulncat --> analyzer
     docdb --> pinecone
-    docdb --> vulnjson
+    pinecone --> analyzer
 
-    static --> slither
-
-    main --> coordinator
-    coordinator --> analyzer
-    coordinator --> exploiter
-    coordinator --> generator
-
-    analyzer --> exploiter
+    %% Agent Pipeline Flow
+    main --> coord
+    coord --> analyzer
+    analyzer --> skeptic
+    skeptic --> exploiter
     exploiter --> generator
 
+    %% Utility Usage
+    fetcher --> blockchain
+    print --> main
+    print --> coord
+
+    %% External Service Integration
     analyzer --> openai
+    skeptic --> openai
     exploiter --> openai
     generator --> openai
+
+    %% Output Generation
+    generator --> |"Generate PoC"|main
 ```
 
 ## Prerequisites

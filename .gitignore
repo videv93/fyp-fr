@@ -16,4 +16,9 @@ repomix-output.txt
 # Test files
 static_analysis/test_contracts
 
+# Exploit files
+exploit
 
+# Node modules
+node_modules
+static_analysis/test_contracts/sample.sol
