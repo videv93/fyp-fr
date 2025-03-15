@@ -6,7 +6,7 @@ from pathlib import Path
 import json
 import logging
 import os
-
+from utils.print_utils import print_step, print_warning, create_progress_spinner
 from openai import OpenAI
 from langchain.schema import Document
 
@@ -31,45 +31,43 @@ class AnalyzerAgent:
         return data["categories"]
 
     def analyze(self, contract_info: Dict) -> Dict:
-        """
-        Summarize the user's contract, retrieve known-vuln code,
-        build a strict JSON prompt, parse response as JSON,
-        THEN attach function code snippets to each reported vulnerability.
-        Return ALL vulnerabilities (no internal ranking).
-        """
         try:
-            # 1) Build query for Pinecone
-            query_text = self._build_query_text(contract_info)
-            relevant_docs = self.retriever.invoke(contract_info["source_code"])
-            print(f"Found {len(relevant_docs)} relevant docs")
+            with create_progress_spinner("Analyzing contract vulnerabilities") as progress:
+                task = progress.add_task("Searching for vulnerability patterns...")
+                query_text = self._build_query_text(contract_info)
+                relevant_docs = self.retriever.invoke(contract_info["source_code"])
+                progress.update(task, description=f"Found {len(relevant_docs)} relevant patterns")
 
-            # 2) Build system + user messages
-            all_categories = self.vuln_categories.keys()
-            system_prompt = (
-                "You are an expert smart contract security auditor. You MUST:\n"
-                "1. Check for ALL these vulnerability categories:\n"
-                "2. You should also check for any other vulnerabilities that may arise based on flaws in business logic.\n"
-                + "\n".join([f"- {cat}" for cat in all_categories])
-                + "\n3. Pay SPECIAL ATTENTION to categories marked 'HIGH PRIORITY' that match known vulnerabilities\n"
-                "4. Use detection strategies as a guide\n"
-                "5. Return valid JSON with EXACT category names\n"
-            )
-            user_prompt = self._construct_analysis_prompt(contract_info, relevant_docs)
+                # Build prompts
+                progress.update(task, description="Constructing analysis prompt...")
 
-            # 3) Call LLM
-            response_text = self._call_llm(system_prompt, user_prompt)
-            # print("AnalyzerAgent response:", response_text)
+                all_categories = self.vuln_categories.keys()
+                system_prompt = (
+                    "You are an expert smart contract security auditor. You MUST:\n"
+                    "1. Check for ALL these vulnerability categories:\n"
+                    "2. You should also check for any other vulnerabilities that may arise based on flaws in business logic.\n"
+                    + "\n".join([f"- {cat}" for cat in all_categories])
+                    + "\n3. Pay SPECIAL ATTENTION to categories marked 'HIGH PRIORITY' that match known vulnerabilities\n"
+                    "4. Use detection strategies as a guide\n"
+                    "5. Return valid JSON with EXACT category names\n"
+                )
+                user_prompt = self._construct_analysis_prompt(contract_info, relevant_docs)
 
-            # 4) Parse JSON
-            vulnerabilities = self._parse_llm_response(response_text)
+                # Call LLM
+                progress.update(task, description="Analyzing with LLM...")
+                response_text = self._call_llm(system_prompt, user_prompt)
 
-            # 5) Attach function code snippet to each vulnerability
-            self._attach_code_snippets(vulnerabilities, contract_info)
+                # Parse results
+                progress.update(task, description="Processing results...")
+                vulnerabilities = self._parse_llm_response(response_text)
+                self._attach_code_snippets(vulnerabilities, contract_info)
+
+                progress.update(task, completed=True)
 
             return {"vulnerabilities": vulnerabilities}
 
         except Exception as e:
-            logger.error(f"AnalyzerAgent error: {str(e)}")
+            print_warning(f"Analysis error: {str(e)}")
             return {"vulnerabilities": [], "error": str(e)}
 
     def _build_query_text(self, contract_info: Dict) -> str:
@@ -241,23 +239,58 @@ TASK:
 
     def _attach_code_snippets(self, vulnerabilities: list, contract_info: dict):
         """
-        For each vulnerability, find the matching function(s) in the
-        contract_info['function_details'] and attach the 'content' as 'code_snippet'.
+        Attach code snippets to vulnerability entries. This function handles both:
+        1. Direct matches from function details when source_mapping.content is available
+        2. Fallback to searching in source code when direct matches aren't found
         """
+        # Create a map of function names to their code content
         fn_map = {}
         for fn_detail in contract_info.get("function_details", []):
-            fn_name = fn_detail["function"]
-            print(f"Function {fn_name}")
-            fn_map[fn_name] = fn_detail.get("content", "")
+            function_name = fn_detail["function"]
+            content = fn_detail.get("content")
+            if content:  # Only add if content is not None or empty
+                fn_map[function_name] = content
+            # Handle fully qualified function names with contract prefixes
+            qualified_name = f"{fn_detail['contract']}.{function_name}"
+            if content:
+                fn_map[qualified_name] = content
 
+        # Extract code for affected functions
         for vuln in vulnerabilities:
             snippet_list = []
-            for fn_name in vuln.get("affected_functions", []):
-                code_snip = fn_map.get(fn_name, "")
-                if code_snip:
+            affected_fns = vuln.get("affected_functions", [])
+            
+            # First try direct matches from function map
+            for fn_name in affected_fns:
+                if code_snip := fn_map.get(fn_name):
                     snippet_list.append(code_snip)
-            # Combine them into one
+            
+            # Set the code snippet
             if snippet_list:
                 vuln["code_snippet"] = "\n\n".join(snippet_list)
             else:
-                vuln["code_snippet"] = "(No matching function code found)"
+                # Try to search for relevant code from source code directly if no matches are found
+                source_code = contract_info.get("source_code", "")
+                if source_code and affected_fns:
+                    for fn_name in affected_fns:
+                        # Extract function name without contract prefix
+                        simple_fn_name = fn_name.split('.')[-1] if '.' in fn_name else fn_name
+                        
+                        # Find in source code directly - basic approach
+                        lines = source_code.split('\n')
+                        for i, line in enumerate(lines):
+                            # Look for function declaration with the name
+                            if f"function {simple_fn_name}" in line:
+                                # Found function declaration, extract surrounding content
+                                start = max(0, i-1)
+                                end = min(len(lines), i+15)  # Get ~15 lines of context
+                                vuln["code_snippet"] = "\n".join(lines[start:end])
+                                break
+                        else:
+                            continue  # Try next function name if this one wasn't found
+                        break  # Exit if we found at least one function
+                    else:
+                        # If no functions were found after searching all
+                        vuln["code_snippet"] = "(No matching function code found)"
+                else:
+                    vuln["code_snippet"] = "(No matching function code found)"
