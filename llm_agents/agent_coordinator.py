@@ -81,7 +81,7 @@ class AgentCoordinator:
         high_conf_vulns = [v for v in rechecked_vulns if v.get("skeptic_confidence", 0) > 0.5]
 
         # Generate for only one for now
-        if high_conf_vulns[:1]:
+        if high_conf_vulns:
             console.print(f"\n[bold blue]💡 ExploiterAgent: Generating educational demonstrations for {len(high_conf_vulns)} vulnerabilities...[/bold blue]")
 
             for i, vul in enumerate(high_conf_vulns):

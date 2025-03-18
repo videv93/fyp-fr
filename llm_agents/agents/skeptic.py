@@ -17,10 +17,15 @@ class SkepticAgent:
         from ..config import ModelConfig
 
         self.model_config = model_config or ModelConfig()
-        self.model_name = self.model_config.get_model("skeptic")
+        self.model_name = self.model_config.get_model("analyzer")
+
+        # Get provider info for the selected model
+        _, api_key_env, _ = self.model_config.get_provider_info(self.model_name)
+
+        # Initialize OpenAI client with the correct settings
         self.client = OpenAI(
-            api_key=os.getenv("OPENAI_API_KEY"),
-            **self.model_config.get_openai_args()
+            api_key=os.getenv(api_key_env),
+            **self.model_config.get_openai_args(self.model_name)
         )
 
     def audit_vulnerabilities(self, contract_source: str, vulnerabilities: list) -> list:
@@ -92,11 +97,19 @@ class SkepticAgent:
                     {"role": "user", "content": system_prompt + user_prompt}
                 ]
 
-            response = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-            )
-            text_out = response.choices[0].message.content.strip()
+            if self.model_name == "claude-3-7-sonnet-latest":
+                resp = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=messages,
+                    max_tokens=64000,
+                    extra_body={ "thinking": { "type": "enabled", "budget_tokens": 2000 } },
+                )
+            else:
+                resp = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=messages
+                )
+            text_out = resp.choices[0].message.content.strip()
 
             # Parse results
             progress.update(task, description="Processing results...")

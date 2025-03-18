@@ -20,10 +20,16 @@ class AnalyzerAgent:
         self.retriever = retriever
         self.model_config = model_config or ModelConfig()
         self.model_name = self.model_config.get_model("analyzer")
+
+        # Get provider info for the selected model
+        _, api_key_env, _ = self.model_config.get_provider_info(self.model_name)
+
+        # Initialize OpenAI client with the correct settings
         self.client = OpenAI(
-            api_key=os.getenv("OPENAI_API_KEY"),
-            **self.model_config.get_openai_args()
+            api_key=os.getenv(api_key_env),
+            **self.model_config.get_openai_args(self.model_name)
         )
+
         # Load vulnerability categories
         self.vuln_categories = self._load_vuln_categories()
 
@@ -228,22 +234,28 @@ Format findings as:
         Use openai.ChatCompletion with the appropriate messaging structure based on model type.
         """
         # Create messages list based on model capabilities
-        if self.model_config.supports_reasoning(self.model_name):
-            # For models that support reasoning-style prompts (Claude, GPT-4, etc.)
+        if not self.model_config.supports_reasoning(self.model_name):
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ]
         else:
-            # For simpler models (o1-mini, etc.), combine system and user prompts
             messages = [
                 {"role": "user", "content": system_prompt + "\n\n" + user_prompt}
             ]
 
-        resp = self.client.chat.completions.create(
-            model=self.model_name,
-            messages=messages,
-        )
+        if self.model_name == "claude-3-7-sonnet-latest":
+            resp = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                max_tokens=64000,
+                extra_body={ "thinking": { "type": "enabled", "budget_tokens": 2000 } },
+            )
+        else:
+            resp = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages
+            )
         return resp.choices[0].message.content.strip()
 
     def _parse_llm_response(self, response_text: str) -> List[Dict]:

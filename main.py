@@ -13,33 +13,33 @@ from utils.print_utils import *
 def parse_arguments():
     """Parse command line arguments for model configuration"""
     parser = argparse.ArgumentParser(description="Smart Contract Vulnerability Analyzer")
-    
+
     # Add model configuration arguments
-    parser.add_argument("--analyzer-model", default="o1-mini", help="Model for analyzer agent")
-    parser.add_argument("--skeptic-model", default="o1-mini", help="Model for skeptic agent")
-    parser.add_argument("--exploiter-model", default="o1-mini", help="Model for exploiter agent")
-    parser.add_argument("--generator-model", default="o1-mini", help="Model for generator agent")
+    parser.add_argument("--analyzer-model", default="o3-mini", help="Model for analyzer agent")
+    parser.add_argument("--skeptic-model", default="o3-mini", help="Model for skeptic agent")
+    parser.add_argument("--exploiter-model", default="o3-mini", help="Model for exploiter agent")
+    parser.add_argument("--generator-model", default="o3-mini", help="Model for generator agent")
     parser.add_argument("--all-models", help="Use this model for all agents")
     parser.add_argument("--api-base", help="Base URL for OpenAI API")
-    
+
     # Add contract file option
-    parser.add_argument("--contract", default="static_analysis/test_contracts/sample3.sol", 
+    parser.add_argument("--contract", default="static_analysis/test_contracts/sample3.sol",
                       help="Path to contract file to analyze")
-    
+
     # Add auto-run options
-    parser.add_argument("--no-auto-run", action="store_true", 
+    parser.add_argument("--no-auto-run", action="store_true",
                       help="Disable automatic execution of generated PoCs")
     parser.add_argument("--max-retries", type=int, default=3,
                       help="Maximum number of fix attempts for failed tests (default: 3)")
-    
+
     return parser.parse_args()
 
 def main():
     print_header("Smart Contract Vulnerability Analyzer")
-    
+
     # Parse command line arguments
     args = parse_arguments()
-    
+
     # Check environment
     try:
         load_dotenv()
@@ -49,7 +49,7 @@ def main():
     except Exception as e:
         print_error(f"Environment setup failed: {str(e)}")
         return
-    
+
     # Setup model configuration
     if args.all_models:
         # Use the same model for all agents if --all-models is specified
@@ -69,7 +69,7 @@ def main():
             generator_model=args.generator_model,
             base_url=args.api_base
         )
-    
+
     # Display model configuration
     print_step("Model Configuration:")
     console.print(f"  Analyzer: [bold]{model_config.analyzer_model}[/bold]")
@@ -110,19 +110,19 @@ def main():
     # Run LLM analysis
     print_header("Running LLM Analysis")
     coordinator = AgentCoordinator(model_config=model_config)
-    
+
     # Pass auto-run configuration
     auto_run_config = {
         "auto_run": not args.no_auto_run,
         "max_retries": args.max_retries
     }
-    
+
     # Display auto-run settings
     if not args.no_auto_run:
         print_step(f"Auto-run enabled with max {args.max_retries} fix attempts")
     else:
         print_step("Auto-run disabled, PoCs will be generated but not executed")
-    
+
     results = coordinator.analyze_contract(contract_info, auto_run_config=auto_run_config)
 
     # Print results
@@ -190,7 +190,7 @@ def main():
                 poc_data = poc["poc_data"]
                 console.print("\n[bold]Generated Proof of Concept:[/bold]")
                 console.print(f"File: [green]{poc_data.get('exploit_file', 'N/A')}[/green]")
-                
+
                 # Show execution results if available
                 if "execution_results" in poc_data:
                     results = poc_data["execution_results"]
@@ -201,7 +201,7 @@ def main():
                             console.print(f"Execution: [bold yellow]FAILED[/bold yellow] after {results.get('retries')} fix attempts ⚠")
                         else:
                             console.print(f"Execution: [bold red]FAILED[/bold red] ✗")
-                        
+
                         # Show error details if we have them
                         if results.get("error"):
                             console.print(f"[dim]Error: {results.get('error')[:200]}...[/dim]")

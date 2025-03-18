@@ -12,10 +12,15 @@ class GeneratorAgent:
         from ..config import ModelConfig
 
         self.model_config = model_config or ModelConfig()
-        self.model_name = self.model_config.get_model("generator")
+        self.model_name = self.model_config.get_model("analyzer")
+
+        # Get provider info for the selected model
+        _, api_key_env, _ = self.model_config.get_provider_info(self.model_name)
+
+        # Initialize OpenAI client with the correct settings
         self.client = OpenAI(
-            api_key=os.getenv("OPENAI_API_KEY"),
-            **self.model_config.get_openai_args()
+            api_key=os.getenv(api_key_env),
+            **self.model_config.get_openai_args(self.model_name)
         )
 
     def generate(self, exploit_plan: Dict) -> Dict:
@@ -128,14 +133,21 @@ Return only the complete Solidity code with no additional explanations.
                 {"role": "user", "content": prompt}
             ]
 
-        response = self.client.chat.completions.create(
-            model=self.model_name,
-            messages=messages,
-            # temperature=0.2,  # Lower temperature for more consistent code generation
-        )
+        if self.model_name == "claude-3-7-sonnet-latest":
+            resp = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                max_tokens=64000,
+                extra_body={ "thinking": { "type": "enabled", "budget_tokens": 2000 } },
+            )
+        else:
+            resp = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages
+            )
 
         # Extract the code from the response
-        response_text = response.choices[0].message.content
+        response_text = resp.choices[0].message.content
 
         # Ensure we have a valid contract by doing some basic checks
         if "contract" not in response_text or "function test" not in response_text:
