@@ -1,29 +1,29 @@
-import React, { useState, useRef } from 'react';
-import { uploadContract, fetchContractByAddress } from '../services/api';
+import React, { useState, useRef } from "react";
+import { uploadContract, fetchContractByAddress } from "../services/api";
 
 const ContractInput = ({ onContractSubmit }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
   const [uploadError, setUploadError] = useState(null);
   const [fetchError, setFetchError] = useState(null);
-  const [contractAddress, setContractAddress] = useState('');
-  const [network, setNetwork] = useState('ethereum');
+  const [contractAddress, setContractAddress] = useState("");
+  const [network, setNetwork] = useState("ethereum");
   const fileInputRef = useRef(null);
   const dragAreaRef = useRef(null);
 
   const handleDragOver = (e) => {
     e.preventDefault();
-    dragAreaRef.current.classList.add('border-blue-500');
+    dragAreaRef.current.classList.add("border-blue-500");
   };
 
   const handleDragLeave = () => {
-    dragAreaRef.current.classList.remove('border-blue-500');
+    dragAreaRef.current.classList.remove("border-blue-500");
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
-    dragAreaRef.current.classList.remove('border-blue-500');
-    
+    dragAreaRef.current.classList.remove("border-blue-500");
+
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       handleFileUpload(e.dataTransfer.files[0]);
     }
@@ -37,8 +37,8 @@ const ContractInput = ({ onContractSubmit }) => {
 
   const handleFileUpload = async (file) => {
     // Check if file is a Solidity file
-    if (!file.name.endsWith('.sol')) {
-      setUploadError('Only Solidity (.sol) files are supported');
+    if (!file.name.endsWith(".sol")) {
+      setUploadError("Only Solidity (.sol) files are supported");
       return;
     }
 
@@ -47,16 +47,16 @@ const ContractInput = ({ onContractSubmit }) => {
 
     try {
       const formData = new FormData();
-      formData.append('file', file);
-      
+      formData.append("file", file);
+
       const response = await uploadContract(formData);
       onContractSubmit({
         id: response.data.job_id,
         name: file.name,
-        status: response.data.status
+        status: response.data.status,
       });
     } catch (error) {
-      setUploadError(error.response?.data?.error || 'Error uploading contract');
+      setUploadError(error.response?.data?.error || "Error uploading contract");
     } finally {
       setIsUploading(false);
     }
@@ -64,9 +64,9 @@ const ContractInput = ({ onContractSubmit }) => {
 
   const handleAddressFetch = async (e) => {
     e.preventDefault();
-    
+
     if (!contractAddress.trim()) {
-      setFetchError('Contract address is required');
+      setFetchError("Contract address is required");
       return;
     }
 
@@ -76,16 +76,16 @@ const ContractInput = ({ onContractSubmit }) => {
     try {
       const response = await fetchContractByAddress({
         address: contractAddress,
-        network: network
+        network: network,
       });
-      
+
       onContractSubmit({
         id: response.data.job_id,
         name: `${contractAddress}.sol`,
-        status: response.data.status
+        status: response.data.status,
       });
     } catch (error) {
-      setFetchError(error.response?.data?.error || 'Error fetching contract');
+      setFetchError(error.response?.data?.error || "Error fetching contract");
     } finally {
       setIsFetching(false);
     }
@@ -94,7 +94,7 @@ const ContractInput = ({ onContractSubmit }) => {
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
       <h2 className="text-xl font-semibold mb-4">Contract Input</h2>
-      
+
       {/* File Upload Area */}
       <div className="mb-6">
         <h3 className="text-lg font-medium mb-2">Upload Solidity File</h3>
@@ -113,14 +113,18 @@ const ContractInput = ({ onContractSubmit }) => {
             accept=".sol"
             onChange={handleFileChange}
           />
-          <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+          {/* <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
             <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4h-8m-12 0H8m12 0a4 4 0 01-4-4v-4m32 0v-4a4 4 0 00-4-4h-4m-12 0h-4a4 4 0 00-4 4v4m4-4h32" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          </svg> */}
           <p className="mt-1 text-sm text-gray-600">
             Drag and drop a .sol file here, or click to select file
           </p>
-          {isUploading && <p className="mt-2 text-sm text-blue-500">Uploading...</p>}
-          {uploadError && <p className="mt-2 text-sm text-red-500">{uploadError}</p>}
+          {isUploading && (
+            <p className="mt-2 text-sm text-blue-500">Uploading...</p>
+          )}
+          {uploadError && (
+            <p className="mt-2 text-sm text-red-500">{uploadError}</p>
+          )}
         </div>
       </div>
 
@@ -129,7 +133,10 @@ const ContractInput = ({ onContractSubmit }) => {
         <h3 className="text-lg font-medium mb-2">Fetch by Contract Address</h3>
         <form onSubmit={handleAddressFetch} className="space-y-3">
           <div>
-            <label htmlFor="network" className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="network"
+              className="block text-sm font-medium text-gray-700"
+            >
               Network
             </label>
             <select
@@ -143,9 +150,12 @@ const ContractInput = ({ onContractSubmit }) => {
               <option value="polygon">Polygon</option>
             </select>
           </div>
-          
+
           <div>
-            <label htmlFor="address" className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="address"
+              className="block text-sm font-medium text-gray-700"
+            >
               Contract Address
             </label>
             <input
@@ -157,16 +167,18 @@ const ContractInput = ({ onContractSubmit }) => {
               onChange={(e) => setContractAddress(e.target.value)}
             />
           </div>
-          
+
           <button
             type="submit"
             disabled={isFetching}
             className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
           >
-            {isFetching ? 'Fetching...' : 'Fetch Contract'}
+            {isFetching ? "Fetching..." : "Fetch Contract"}
           </button>
-          
-          {fetchError && <p className="mt-2 text-sm text-red-500">{fetchError}</p>}
+
+          {fetchError && (
+            <p className="mt-2 text-sm text-red-500">{fetchError}</p>
+          )}
         </form>
       </div>
     </div>
