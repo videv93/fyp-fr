@@ -1,9 +1,9 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React from "react";
+import { Link } from "react-router-dom";
 
 const Header = () => {
   return (
-    <header className="bg-blue-600 text-white shadow-md">
+    <header className="bg-gradient-to-r from-indigo-700 to-blue-600 text-white shadow-lg">
       <div className="container mx-auto p-4">
         <div className="flex justify-between items-center">
           <Link to="/" className="text-2xl font-bold">
@@ -17,10 +17,12 @@ const Header = () => {
                 </Link>
               </li>
               <li>
-                <a href="https://github.com/yourusername/smart-contract-analyzer" 
-                   target="_blank" 
-                   rel="noreferrer"
-                   className="hover:text-blue-200">
+                <a
+                  href="https://github.com/yourusername/smart-contract-analyzer"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:text-blue-200"
+                >
                   GitHub
                 </a>
               </li>

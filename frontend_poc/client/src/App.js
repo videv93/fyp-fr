@@ -30,6 +30,7 @@ function App() {
     generator_model: "o3-mini",
     auto_run: true,
     max_retries: 3,
+    use_rag: true,
   });
 
   // Keep a reference to currentJob that won't cause effect hook to re-run
@@ -104,12 +105,28 @@ function App() {
       }
     };
 
+    const onContractFetched = (data) => {
+      console.log("Contract fetched event:", data);
+      if (currentJobRef.current?.id === data.job_id) {
+        setJobStatus("fetched");
+      }
+    };
+
+    const onContractFetchError = (data) => {
+      console.log("Contract fetch error event:", data);
+      if (currentJobRef.current?.id === data.job_id) {
+        setJobStatus("error");
+      }
+    };
+
     socket.on("connect", onConnect);
     socket.on("analysis_started", onAnalysisStarted);
     socket.on("agent_active", onAgentActive);
     socket.on("agent_complete", onAgentComplete);
     socket.on("analysis_complete", onAnalysisComplete);
     socket.on("analysis_error", onAnalysisError);
+    socket.on("contract_fetched", onContractFetched);
+    socket.on("contract_fetch_error", onContractFetchError);
 
     // Clean up on unmount
     return () => {
@@ -120,6 +137,8 @@ function App() {
       socket.off("agent_complete", onAgentComplete);
       socket.off("analysis_complete", onAnalysisComplete);
       socket.off("analysis_error", onAnalysisError);
+      socket.off("contract_fetched", onContractFetched);
+      socket.off("contract_fetch_error", onContractFetchError);
     };
   }, []); // Empty dependency array to set up only once
 
@@ -187,7 +206,7 @@ function App() {
       <div className="min-h-screen bg-gray-100">
         <Header />
 
-        <main className="container mx-auto p-4">
+        <main className="container mx-auto p-4 md:p-6 max-w-7xl">
           <Routes>
             <Route
               path="/"

@@ -18,21 +18,27 @@ from .config import ModelConfig
 from utils.print_utils import print_step, print_success, print_warning
 
 class AgentCoordinator:
-    def __init__(self, model_config=None):
+    def __init__(self, model_config=None, use_rag=True):
         """
         Initialize the agent coordinator with configurable models.
 
         Args:
             model_config: Optional ModelConfig instance. If None, default config will be used.
+            use_rag: Boolean to enable/disable Retrieval Augmented Generation for analysis.
         """
         self.model_config = model_config or ModelConfig()
+        self.use_rag = use_rag
 
-        self.vuln_retriever = get_vuln_retriever_from_json(
-            json_path="known_vulnerabilities/contract_vulns.json",
-            base_dataset_dir="known_vulnerabilities",
-            index_name="fyp",
-            top_k=3,
-        )
+        # Initialize retriever only if RAG is enabled
+        if self.use_rag:
+            self.vuln_retriever = get_vuln_retriever_from_json(
+                json_path="known_vulnerabilities/contract_vulns.json",
+                base_dataset_dir="known_vulnerabilities",
+                index_name="fyp",
+                top_k=3,
+            )
+        else:
+            self.vuln_retriever = None
 
         self.analyzer = AnalyzerAgent(self.vuln_retriever, model_config=self.model_config)
         self.skeptic = SkepticAgent(model_config=self.model_config)

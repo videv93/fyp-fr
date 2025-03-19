@@ -47,8 +47,14 @@ class AnalyzerAgent:
             with create_progress_spinner("Analyzing contract vulnerabilities") as progress:
                 task = progress.add_task("Searching for vulnerability patterns...")
                 query_text = self._build_query_text(contract_info)
-                relevant_docs = self.retriever.invoke(contract_info["source_code"])
-                progress.update(task, description=f"Found {len(relevant_docs)} relevant patterns")
+                
+                # Check if retriever is enabled
+                if self.retriever:
+                    relevant_docs = self.retriever.invoke(contract_info["source_code"])
+                    progress.update(task, description=f"Found {len(relevant_docs)} relevant patterns")
+                else:
+                    relevant_docs = []
+                    progress.update(task, description="RAG disabled, using direct analysis")
 
                 # Build prompts
                 progress.update(task, description="Constructing analysis prompt...")

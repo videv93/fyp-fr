@@ -31,6 +31,10 @@ def parse_arguments():
                       help="Disable automatic execution of generated PoCs")
     parser.add_argument("--max-retries", type=int, default=3,
                       help="Maximum number of fix attempts for failed tests (default: 3)")
+    
+    # Add RAG option
+    parser.add_argument("--no-rag", action="store_true",
+                      help="Disable Retrieval Augmented Generation for analysis")
 
     return parser.parse_args()
 
@@ -109,7 +113,7 @@ def main():
 
     # Run LLM analysis
     print_header("Running LLM Analysis")
-    coordinator = AgentCoordinator(model_config=model_config)
+    coordinator = AgentCoordinator(model_config=model_config, use_rag=not args.no_rag)
 
     # Pass auto-run configuration
     auto_run_config = {
@@ -122,6 +126,12 @@ def main():
         print_step(f"Auto-run enabled with max {args.max_retries} fix attempts")
     else:
         print_step("Auto-run disabled, PoCs will be generated but not executed")
+        
+    # Display RAG settings
+    if not args.no_rag:
+        print_step("RAG enabled for enhanced vulnerability detection")
+    else:
+        print_step("RAG disabled, analysis will use only current contract code")
 
     results = coordinator.analyze_contract(contract_info, auto_run_config=auto_run_config)
 

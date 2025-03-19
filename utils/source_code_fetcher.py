@@ -9,19 +9,26 @@ load_dotenv()
 
 BSCSCAN_API_KEY = os.getenv("BSCSCAN_API_KEY")
 ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY")
-
+BASESCAN_API_KEY = os.getenv("BASESCAN_API_KEY")
 
 def fetch_and_flatten_contract(
     network: str,
     contract_address: str,
-    api_key: str,
     output_file: str = "contract_flat.sol",
 ):
     explorers = {
         "ethereum": "https://api.etherscan.io/api",
         "bsc": "https://api.bscscan.com/api",
-        "polygon": "https://api.polygonscan.com/api",
+        "base": "https://api.basescan.org/api",
     }
+
+    api_keys = {
+        "ethereum": ETHERSCAN_API_KEY,
+        "bsc": BSCSCAN_API_KEY,
+        "base": BASESCAN_API_KEY,
+    }
+
+    api_key = api_keys[network]
 
     if network not in explorers:
         raise ValueError("Unsupported network. Use: ethereum, bsc, polygon.")
@@ -143,8 +150,7 @@ output_path = os.path.join(
     os.path.dirname(__file__), "..", "static_analysis", "test_contracts", "sample.sol"
 )
 fetch_and_flatten_contract(
-    "bsc",
-    "0x109ea28dbdea5e6ec126fbc8c33845dfe812a300",
-    BSCSCAN_API_KEY,
+    "base",
+    "0xd990094a611c3de34664dd3664ebf979a1230fc1",
     output_file=output_path,
 )

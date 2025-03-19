@@ -74,10 +74,13 @@ const ContractInput = ({ onContractSubmit }) => {
     setFetchError(null);
 
     try {
+      console.log("Fetching contract:", contractAddress, network);
       const response = await fetchContractByAddress({
         address: contractAddress,
         network: network,
       });
+
+      console.log("Contract fetch response:", response.data);
 
       onContractSubmit({
         id: response.data.job_id,
@@ -85,6 +88,7 @@ const ContractInput = ({ onContractSubmit }) => {
         status: response.data.status,
       });
     } catch (error) {
+      console.error("Error fetching contract:", error);
       setFetchError(error.response?.data?.error || "Error fetching contract");
     } finally {
       setIsFetching(false);
@@ -147,7 +151,7 @@ const ContractInput = ({ onContractSubmit }) => {
             >
               <option value="ethereum">Ethereum</option>
               <option value="bsc">Binance Smart Chain</option>
-              <option value="polygon">Polygon</option>
+              <option value="base">Base</option>
             </select>
           </div>
 
@@ -171,7 +175,7 @@ const ContractInput = ({ onContractSubmit }) => {
           <button
             type="submit"
             disabled={isFetching}
-            className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+            className="w-full py-2.5 px-5 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
           >
             {isFetching ? "Fetching..." : "Fetch Contract"}
           </button>
