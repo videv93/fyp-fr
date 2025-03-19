@@ -91,7 +91,7 @@ class AgentCoordinator:
                 console.print(f"\n[bold blue]🔧 GeneratorAgent: Creating PoC for {vul.get('vulnerability_type')}...[/bold blue]")
 
                 # First generate the BaseTestWithBalanceLog.sol file if it doesn't exist
-                if not os.path.exists("exploit/BaseTestWithBalanceLog.sol"):
+                if not os.path.exists("exploit/src/test/basetest.sol"):
                     base_file = self.generator.generate_basetest_file()
                     console.print(f"[dim]Created base file: {base_file}[/dim]")
 
