@@ -1,6 +1,64 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 
-const AgentVisualizer = ({ activeAgent, status, completedAgents = [] }) => {
+// Component to show RAG details
+const RAGDetailsPanel = ({ details = [] }) => {
+  const [expandedItem, setExpandedItem] = useState(null);
+  
+  if (!details || details.length === 0) return null;
+  
+  return (
+    <div className="mt-4 p-4 bg-indigo-50 border border-indigo-200 rounded-md">
+      <h3 className="text-lg font-semibold text-indigo-800 mb-3">
+        Retrieved Similar Vulnerabilities ({details.length})
+      </h3>
+      <div className="space-y-3">
+        {details.map((item, index) => (
+          <div key={index} className="bg-white border border-indigo-100 rounded-md overflow-hidden">
+            <div 
+              className="flex items-center justify-between p-3 cursor-pointer bg-indigo-50 hover:bg-indigo-100"
+              onClick={() => setExpandedItem(expandedItem === index ? null : index)}
+            >
+              <div>
+                <span className="font-medium text-indigo-700">
+                  {item.filename}
+                </span>
+                <span className="text-xs text-indigo-600 ml-2">
+                  (Lines {item.lines_range})
+                </span>
+              </div>
+              <div className="flex items-center">
+                <div className="flex space-x-1 mr-2">
+                  {item.vuln_categories.map((cat, i) => (
+                    <span key={i} className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded">
+                      {cat}
+                    </span>
+                  ))}
+                </div>
+                <svg 
+                  className={`w-5 h-5 text-indigo-500 transform transition-transform ${expandedItem === index ? 'rotate-180' : ''}`} 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+            {expandedItem === index && (
+              <div className="p-3 border-t border-indigo-100">
+                <pre className="text-xs bg-gray-50 p-3 rounded overflow-auto max-h-60 font-mono">
+                  {item.content_preview}
+                </pre>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const AgentVisualizer = ({ activeAgent, status, completedAgents = [], agentDetails = {}, ragDetails = [] }) => {
   // Define all steps in the workflow
   const workflowSteps = [
     {
@@ -193,11 +251,21 @@ const AgentVisualizer = ({ activeAgent, status, completedAgents = [] }) => {
                   )}
                 </div>
 
-                <div>
+                <div className="w-full">
                   <div className={`font-medium ${textColor}`}>{step.label}</div>
                   <div className="text-sm text-gray-500">
-                    {step.description}
+                    {agentDetails[step.id]?.detail || step.description}
                   </div>
+                  {agentDetails[step.id]?.status && stepStatus === "active" && (
+                    <div className="mt-1 text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded">
+                      {agentDetails[step.id].status}
+                    </div>
+                  )}
+                  {agentDetails[step.id]?.result && stepStatus === "completed" && (
+                    <div className="mt-1 text-xs bg-green-50 text-green-700 px-2 py-1 rounded">
+                      {agentDetails[step.id].result}
+                    </div>
+                  )}
                 </div>
 
                 {stepStatus === "active" && (
@@ -213,39 +281,54 @@ const AgentVisualizer = ({ activeAgent, status, completedAgents = [] }) => {
 
       {/* Current activity indicator */}
       {status === "analyzing" && activeAgent && (
-        <div className="mt-6 p-3 bg-blue-50 border border-blue-200 rounded-md flex items-center">
-          <div className="animate-pulse mr-3">
-            <svg
-              className="w-5 h-5 text-blue-500"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
-              <path
-                fillRule="evenodd"
-                d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
-                clipRule="evenodd"
-              ></path>
-            </svg>
+        <div className="mt-6 p-3 bg-blue-50 border border-blue-200 rounded-md">
+          <div className="flex items-center mb-2">
+            <div className="animate-pulse mr-3">
+              <svg
+                className="w-5 h-5 text-blue-500"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
+                  clipRule="evenodd"
+                ></path>
+              </svg>
+            </div>
+            <div>
+              <span className="font-medium text-blue-700">Current activity:</span>{" "}
+              <span className="text-blue-600">
+                {agentDetails[activeAgent]?.status || 
+                  (activeAgent === "static_analyzer"
+                    ? "Running static analysis"
+                    : activeAgent === "analyzer"
+                      ? "Analyzing contract for vulnerabilities"
+                      : activeAgent === "skeptic"
+                        ? "Verifying vulnerability validity"
+                        : activeAgent === "exploiter"
+                          ? "Creating exploit plan"
+                          : activeAgent === "generator"
+                            ? "Generating PoC code"
+                            : activeAgent === "runner"
+                              ? "Running and fixing exploit"
+                              : "Processing...")}
+              </span>
+            </div>
           </div>
-          <div>
-            <span className="font-medium text-blue-700">Current activity:</span>{" "}
-            <span className="text-blue-600">
-              {activeAgent === "static_analyzer"
-                ? "Running static analysis"
-                : activeAgent === "analyzer"
-                  ? "Analyzing contract for vulnerabilities"
-                  : activeAgent === "skeptic"
-                    ? "Verifying vulnerability validity"
-                    : activeAgent === "exploiter"
-                      ? "Creating exploit plan"
-                      : activeAgent === "generator"
-                        ? "Generating PoC code"
-                        : activeAgent === "runner"
-                          ? "Running and fixing exploit"
-                          : "Processing..."}
-            </span>
-          </div>
+          
+          {/* Detailed status */}
+          {agentDetails[activeAgent]?.detail && (
+            <div className="ml-8 text-sm text-blue-600 border-l-2 border-blue-200 pl-3">
+              {agentDetails[activeAgent].detail}
+            </div>
+          )}
         </div>
+      )}
+      
+      {/* Display RAG details if available and the analyzer agent is active or complete */}
+      {ragDetails.length > 0 && (activeAgent === "analyzer" || completedAgents.includes("analyzer")) && (
+        <RAGDetailsPanel details={ragDetails} />
       )}
 
       {/* Success indicator */}

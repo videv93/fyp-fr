@@ -23,6 +23,8 @@ function App() {
   const [analysisResults, setAnalysisResults] = useState(null);
   const [activeAgent, setActiveAgent] = useState(null);
   const [completedAgents, setCompletedAgents] = useState([]);
+  const [agentDetails, setAgentDetails] = useState({});
+  const [ragDetails, setRagDetails] = useState([]);
   const [analysisOptions, setAnalysisOptions] = useState({
     analyzer_model: "o3-mini",
     skeptic_model: "o3-mini",
@@ -76,6 +78,18 @@ function App() {
           return prev;
         });
 
+        // Save the result if provided
+        if (data.result) {
+          setAgentDetails((prev) => ({
+            ...prev,
+            [agent]: {
+              ...prev[agent],
+              result: data.result,
+              timestamp: new Date().toISOString(),
+            },
+          }));
+        }
+
         // If this agent was active, clear it
         setActiveAgent((prev) => (prev === agent ? null : prev));
       }
@@ -112,6 +126,27 @@ function App() {
       }
     };
 
+    const onAgentStatus = (data) => {
+      console.log("Agent status event:", data);
+      if (currentJobRef.current?.id === data.job_id) {
+        setAgentDetails((prev) => ({
+          ...prev,
+          [data.agent]: {
+            status: data.status,
+            detail: data.detail,
+            timestamp: new Date().toISOString(),
+          },
+        }));
+      }
+    };
+
+    const onRagDetails = (data) => {
+      console.log("RAG details event:", data);
+      if (currentJobRef.current?.id === data.job_id) {
+        setRagDetails(data.details || []);
+      }
+    };
+
     const onContractFetchError = (data) => {
       console.log("Contract fetch error event:", data);
       if (currentJobRef.current?.id === data.job_id) {
@@ -123,6 +158,8 @@ function App() {
     socket.on("analysis_started", onAnalysisStarted);
     socket.on("agent_active", onAgentActive);
     socket.on("agent_complete", onAgentComplete);
+    socket.on("agent_status", onAgentStatus);
+    socket.on("rag_details", onRagDetails);
     socket.on("analysis_complete", onAnalysisComplete);
     socket.on("analysis_error", onAnalysisError);
     socket.on("contract_fetched", onContractFetched);
@@ -135,6 +172,8 @@ function App() {
       socket.off("analysis_started", onAnalysisStarted);
       socket.off("agent_active", onAgentActive);
       socket.off("agent_complete", onAgentComplete);
+      socket.off("agent_status", onAgentStatus);
+      socket.off("rag_details", onRagDetails);
       socket.off("analysis_complete", onAnalysisComplete);
       socket.off("analysis_error", onAnalysisError);
       socket.off("contract_fetched", onContractFetched);
@@ -178,6 +217,8 @@ function App() {
     setAnalysisResults(null);
     setActiveAgent(null);
     setCompletedAgents([]); // Reset completed agents
+    setAgentDetails({}); // Reset agent details
+    setRagDetails([]); // Reset RAG details
   };
 
   const handleStartAnalysis = async () => {
@@ -232,12 +273,14 @@ function App() {
                         activeAgent={activeAgent}
                         status={jobStatus}
                         completedAgents={completedAgents}
+                        agentDetails={agentDetails}
+                        ragDetails={ragDetails}
                       />
                     </div>
                   )}
 
                   {analysisResults && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 gap-6">
                       <VulnerabilitiesPanel
                         vulnerabilities={
                           analysisResults.rechecked_vulnerabilities || []
