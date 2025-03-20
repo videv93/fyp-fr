@@ -44,7 +44,6 @@ class SkepticAgent:
     2. Preconditions - What conditions must be met for this to be exploited?
     3. Practical impact - What would be the consequence if exploited?
     4. Implementation details - Is the code actually vulnerable in the way described?
-    5. Common vulnerability patterns - Does this match known vulnerability patterns?
 
     For each alleged vulnerability, determine:
       1) Is it a genuine vulnerability that warrants attention?
@@ -102,7 +101,7 @@ class SkepticAgent:
                     model=self.model_name,
                     messages=messages,
                     max_tokens=64000,
-                    extra_body={ "thinking": { "type": "enabled", "budget_tokens": 2000 } },
+                    extra_body={ "thinking": { "type": "enabled", "budget_tokens": 5000 } },
                 )
             else:
                 resp = self.client.chat.completions.create(

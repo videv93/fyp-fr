@@ -86,14 +86,28 @@ class AgentCoordinator:
         generated_pocs = []
         high_conf_vulns = [v for v in rechecked_vulns if float(v.get("skeptic_confidence", 0)) > 0.5]
 
-        # Generate for only one for now
+        # Process high confidence vulnerabilities
         if high_conf_vulns:
-            console.print(f"\n[bold blue]💡 ExploiterAgent: Generating educational demonstrations for {len(high_conf_vulns)} vulnerabilities...[/bold blue]")
+            console.print(f"\n[bold blue]💡 ExploiterAgent: Generating exploit plans for {len(high_conf_vulns)} vulnerabilities...[/bold blue]")
 
             for i, vul in enumerate(high_conf_vulns):
                 console.print(f"  Working on {vul.get('vulnerability_type')} (#{i+1}/{len(high_conf_vulns)})...")
                 plan_data = self.exploiter.generate_exploit_plan(vul)
-
+                
+                # Store the exploit plan for each vulnerability
+                poc_info = {
+                    "vulnerability": vul,
+                    "exploit_plan": plan_data.get("exploit_plan"),
+                }
+                
+                # Skip PoC generation if configured to do so
+                if self.model_config.skip_poc_generation:
+                    console.print(f"[dim]Skipping PoC generation as requested.[/dim]")
+                    generated_pocs.append(poc_info)
+                    console.print(f"[bold green]✓ Generated exploit plan for {vul.get('vulnerability_type')}[/bold green]")
+                    continue
+                
+                # Otherwise continue with PoC generation
                 console.print(f"\n[bold blue]🔧 GeneratorAgent: Creating PoC for {vul.get('vulnerability_type')}...[/bold blue]")
 
                 # First generate the BaseTestWithBalanceLog.sol file if it doesn't exist
@@ -129,11 +143,9 @@ class AgentCoordinator:
                 else:
                     console.print(f"[dim]Auto-run disabled. Test generated but not executed.[/dim]")
 
-                generated_pocs.append({
-                    "vulnerability": vul,
-                    "exploit_plan": plan_data.get("exploit_plan"),
-                    "poc_data": poc_data,
-                })
+                # Add PoC data to the result
+                poc_info["poc_data"] = poc_data
+                generated_pocs.append(poc_info)
                 console.print(f"[bold green]✓ Generated demonstration for {vul.get('vulnerability_type')}[/bold green]")
 
         console.print("\n[bold green]✓ Agent workflow completed[/bold green]")

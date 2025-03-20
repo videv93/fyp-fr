@@ -127,8 +127,38 @@ const AnalysisOptions = ({
             Use RAG (Retrieval Augmented Generation) for enhanced analysis
           </label>
         </div>
+        
+        <div className="flex items-center">
+          <input
+            id="skip_poc_generation"
+            name="skip_poc_generation"
+            type="checkbox"
+            checked={options.skip_poc_generation}
+            onChange={handleChange}
+            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            disabled={isAnalyzing}
+          />
+          <label htmlFor="skip_poc_generation" className="ml-2 block text-sm text-gray-700">
+            Skip PoC generation (stop at exploit plans)
+          </label>
+        </div>
+        
+        <div className="flex items-center">
+          <input
+            id="export_markdown"
+            name="export_markdown"
+            type="checkbox"
+            checked={options.export_markdown}
+            onChange={handleChange}
+            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            disabled={isAnalyzing}
+          />
+          <label htmlFor="export_markdown" className="ml-2 block text-sm text-gray-700">
+            Export report as Markdown
+          </label>
+        </div>
 
-        {options.auto_run && (
+        {options.auto_run && !options.skip_poc_generation && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Max Fix Retries

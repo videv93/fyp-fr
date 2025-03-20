@@ -133,6 +133,8 @@ def start_analysis():
         skeptic_model=data.get('skeptic_model', 'o3-mini'),
         exploiter_model=data.get('exploiter_model', 'o3-mini'),
         generator_model=data.get('generator_model', 'o3-mini'),
+        skip_poc_generation=data.get('skip_poc_generation', False),
+        export_markdown=data.get('export_markdown', False),
     )
 
     # Get auto-run configuration
@@ -152,6 +154,8 @@ def start_analysis():
             'skeptic_model': model_config.skeptic_model,
             'exploiter_model': model_config.exploiter_model,
             'generator_model': model_config.generator_model,
+            'skip_poc_generation': model_config.skip_poc_generation,
+            'export_markdown': model_config.export_markdown,
         },
         'auto_run_config': auto_run_config,
         'use_rag': use_rag
@@ -619,6 +623,16 @@ class SocketIOAgentCoordinator(AgentCoordinator):
                     'result': f'Created exploit plan for {vuln_type}'
                 })
 
+                # Skip PoC generation if configured
+                if self.model_config.skip_poc_generation:
+                    print(f"Skipping PoC generation for job {self.job_id} as requested")
+                    # Store just the exploit plan
+                    generated_pocs.append({
+                        "vulnerability": vul,
+                        "exploit_plan": plan_data.get("exploit_plan"),
+                    })
+                    continue
+                    
                 # GENERATOR AGENT
                 print(f"Emitting agent_active event for generator for job {self.job_id}")
                 socketio.emit('agent_active', {
@@ -727,10 +741,180 @@ class SocketIOAgentCoordinator(AgentCoordinator):
                     "poc_data": poc_data,
                 })
 
-        return {
+        result = {
             "rechecked_vulnerabilities": rechecked_vulns,
             "generated_pocs": generated_pocs,
         }
+        
+        # Export report as markdown if configured
+        if self.model_config.export_markdown:
+            self.export_results_to_markdown(contract_info["source_code"], result)
+            
+        return result
+        
+    def export_results_to_markdown(self, contract_code, results):
+        """Export analysis results to a markdown file in the uploads directory"""
+        from datetime import datetime
+        import os
+        
+        # Create output filename based on the job id
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads")
+        os.makedirs(output_dir, exist_ok=True)
+        output_file = os.path.join(output_dir, f"analysis_report_{self.job_id}_{timestamp}.md")
+        
+        print(f"Exporting analysis report to {output_file}")
+        
+        rechecked_vulns = results.get("rechecked_vulnerabilities", [])
+        pocs = results.get("generated_pocs", [])
+        
+        with open(output_file, "w") as f:
+            # Write header
+            f.write(f"# Smart Contract Vulnerability Analysis Report\n\n")
+            f.write(f"**Job ID:** {self.job_id}\n")
+            f.write(f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            
+            # Add a code preview (first few lines)
+            code_preview = "\n".join(contract_code.split("\n")[:20]) + "\n..."
+            f.write(f"**Contract Preview:**\n\n```solidity\n{code_preview}\n```\n\n")
+            
+            # Vulnerability summary
+            f.write(f"## Vulnerability Summary\n\n")
+            if not rechecked_vulns:
+                f.write("No vulnerabilities were detected in this contract.\n\n")
+            else:
+                f.write(f"Found {len(rechecked_vulns)} potential vulnerabilities:\n\n")
+                
+                # Create a summary table
+                f.write("| # | Vulnerability Type | Confidence | Affected Functions |\n")
+                f.write("|---|-------------------|------------|--------------------|\n")
+                
+                for idx, vuln in enumerate(rechecked_vulns, start=1):
+                    vuln_type = vuln.get('vulnerability_type', 'Unknown')
+                    confidence = float(vuln.get('skeptic_confidence', 0))
+                    affected = ', '.join(vuln.get('affected_functions', ['Unknown']))
+                    f.write(f"| {idx} | {vuln_type} | {confidence:.2f} | {affected} |\n")
+                
+                f.write("\n")
+            
+            # Detailed vulnerability analysis
+            if rechecked_vulns:
+                f.write("## Detailed Analysis\n\n")
+                
+                for idx, vuln in enumerate(rechecked_vulns, start=1):
+                    vuln_type = vuln.get('vulnerability_type', 'Unknown')
+                    confidence = float(vuln.get('skeptic_confidence', 0))
+                    
+                    f.write(f"### Vulnerability #{idx}: {vuln_type}\n\n")
+                    f.write(f"**Confidence:** {confidence:.2f}\n\n")
+                    
+                    if vuln.get('reasoning'):
+                        f.write(f"**Reasoning:**\n\n{vuln.get('reasoning')}\n\n")
+                    
+                    if vuln.get('validity_reasoning'):
+                        f.write(f"**Validation:**\n\n{vuln.get('validity_reasoning')}\n\n")
+                    
+                    if vuln.get('code_snippet'):
+                        f.write(f"**Code Snippet:**\n\n```solidity\n{vuln.get('code_snippet')}\n```\n\n")
+                    
+                    if vuln.get('affected_functions'):
+                        f.write(f"**Affected Functions:** {', '.join(vuln.get('affected_functions'))}\n\n")
+                    
+                    # Look for a corresponding PoC
+                    matching_poc = next((p for p in pocs if p["vulnerability"].get("vulnerability_type") == vuln_type), None)
+                    if matching_poc and matching_poc.get("exploit_plan"):
+                        f.write("**Exploit Plan:**\n\n")
+                        
+                        # Add all steps from the exploit plan
+                        plan = matching_poc["exploit_plan"]
+                        
+                        if plan.get("setup_steps"):
+                            f.write("*Setup Steps:*\n\n")
+                            for step in plan.get("setup_steps", []):
+                                f.write(f"- {step}\n")
+                            f.write("\n")
+                        
+                        if plan.get("execution_steps"):
+                            f.write("*Execution Steps:*\n\n")
+                            for step in plan.get("execution_steps", []):
+                                f.write(f"- {step}\n")
+                            f.write("\n")
+                        
+                        if plan.get("validation_steps"):
+                            f.write("*Validation Steps:*\n\n")
+                            for step in plan.get("validation_steps", []):
+                                f.write(f"- {step}\n")
+                            f.write("\n")
+                    
+                    # Add a separator between vulnerabilities
+                    f.write("---\n\n")
+            
+            # PoC information if any were generated and not skipped
+            if pocs and any("poc_data" in poc for poc in pocs):
+                f.write("## Proof of Concept Exploits\n\n")
+                
+                for idx, poc in enumerate(pocs, start=1):
+                    if "poc_data" not in poc:
+                        continue
+                        
+                    vuln = poc['vulnerability']
+                    vuln_type = vuln.get('vulnerability_type', 'Unknown')
+                    
+                    f.write(f"### PoC #{idx}: {vuln_type}\n\n")
+                    
+                    poc_data = poc["poc_data"]
+                    f.write(f"**File:** {poc_data.get('exploit_file', 'N/A')}\n\n")
+                    
+                    # Add execution results if available
+                    if "execution_results" in poc_data:
+                        results = poc_data["execution_results"]
+                        if results.get("success"):
+                            f.write("**Execution:** ✅ SUCCESS\n\n")
+                        else:
+                            f.write(f"**Execution:** ❌ FAILED after {results.get('retries', 0)} fix attempts\n\n")
+                            
+                            if results.get("error"):
+                                f.write(f"**Error:** {results.get('error')}\n\n")
+                    
+                    # Add PoC code if available
+                    if poc_data.get("exploit_code"):
+                        f.write("**Exploit Code:**\n\n```solidity\n")
+                        f.write(poc_data.get("exploit_code"))
+                        f.write("\n```\n\n")
+                    
+                    # Add a separator between PoCs
+                    f.write("---\n\n")
+            
+            # Footer with recommendations
+            f.write("## Recommendations\n\n")
+            f.write("For each identified vulnerability, consider implementing the following mitigations:\n\n")
+            
+            # Add generic recommendations based on found vulnerability types
+            vuln_types = [v.get('vulnerability_type', '').lower() for v in rechecked_vulns]
+            
+            if any('reentrancy' in vt for vt in vuln_types):
+                f.write("- **For Reentrancy**: Implement checks-effects-interactions pattern and consider using ReentrancyGuard.\n")
+            
+            if any('overflow' in vt or 'underflow' in vt or 'arithmetic' in vt for vt in vuln_types):
+                f.write("- **For Arithmetic Issues**: Use SafeMath library or Solidity 0.8.x built-in overflow checking.\n")
+            
+            if any('access' in vt or 'authorization' in vt or 'permission' in vt for vt in vuln_types):
+                f.write("- **For Access Control**: Implement proper authorization checks and use the Ownable pattern.\n")
+            
+            if any('oracle' in vt or 'price' in vt for vt in vuln_types):
+                f.write("- **For Oracle Manipulation**: Use time-weighted average prices and multiple independent oracle sources.\n")
+            
+            # Add a general recommendation
+            f.write("- **For All Vulnerabilities**: Consider a professional audit before deploying to production.\n\n")
+            
+            f.write("*This report was generated automatically by the Smart Contract Vulnerability Analyzer.*\n")
+        
+        # Also emit an event to notify the frontend
+        socketio.emit('report_exported', {
+            'job_id': self.job_id,
+            'report_path': os.path.basename(output_file),
+            'filename': os.path.basename(output_file)
+        })
 
 if __name__ == '__main__':
     # Match the port with your socket in the frontend

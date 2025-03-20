@@ -20,3 +20,6 @@ static_analysis/test_contracts
 # Node modules
 node_modules
 static_analysis/test_contracts/sample.sol
+
+# benchmark files
+benchmark_data

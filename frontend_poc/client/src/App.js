@@ -33,6 +33,8 @@ function App() {
     auto_run: true,
     max_retries: 3,
     use_rag: true,
+    skip_poc_generation: false,
+    export_markdown: false,
   });
 
   // Keep a reference to currentJob that won't cause effect hook to re-run

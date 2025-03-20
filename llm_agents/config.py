@@ -12,6 +12,8 @@ class ModelConfig:
         generator_model (str): Model to use for the generator agent
         base_url (str): Base URL for the OpenAI API (can be changed for proxies/alternatives)
         is_reasoning_model (Dict[str, bool]): Dictionary specifying which models support reasoning
+        skip_poc_generation (bool): Whether to skip the PoC code generation step and stop at exploit plans
+        export_markdown (bool): Whether to export the analysis report as a markdown file
     """
 
     def __init__(
@@ -21,12 +23,16 @@ class ModelConfig:
         exploiter_model: str = "o3-mini",
         generator_model: str = "o3-mini",
         base_url: Optional[str] = None,
+        skip_poc_generation: bool = False,
+        export_markdown: bool = False,
     ):
         self.analyzer_model = analyzer_model
         self.skeptic_model = skeptic_model
         self.exploiter_model = exploiter_model
         self.generator_model = generator_model
         self.base_url = base_url
+        self.skip_poc_generation = skip_poc_generation
+        self.export_markdown = export_markdown
 
         # Define which models support reasoning-style prompts vs direct prompts
         self.is_reasoning_model = {
