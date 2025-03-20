@@ -10,6 +10,7 @@ load_dotenv()
 BSCSCAN_API_KEY = os.getenv("BSCSCAN_API_KEY")
 ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY")
 BASESCAN_API_KEY = os.getenv("BASESCAN_API_KEY")
+ARBISCAN_API_KEY = os.getenv("ARBISCAN_API_KEY")
 
 def fetch_and_flatten_contract(
     network: str,
@@ -20,12 +21,14 @@ def fetch_and_flatten_contract(
         "ethereum": "https://api.etherscan.io/api",
         "bsc": "https://api.bscscan.com/api",
         "base": "https://api.basescan.org/api",
+        "arbitrum": "https://api.arbiscan.io/api",
     }
 
     api_keys = {
         "ethereum": ETHERSCAN_API_KEY,
         "bsc": BSCSCAN_API_KEY,
         "base": BASESCAN_API_KEY,
+        "arbitrum": ARBISCAN_API_KEY,
     }
 
     api_key = api_keys[network]

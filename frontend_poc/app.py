@@ -76,16 +76,6 @@ def fetch_contract():
     job_id = str(uuid.uuid4())
     output_file = os.path.join(UPLOAD_FOLDER, f"{job_id}_contract.sol")
 
-    # Get API key based on network
-    api_key_env = None
-    if data['network'] == 'ethereum':
-        api_key_env = os.getenv('ETHERSCAN_API_KEY')
-    elif data['network'] == 'bsc':
-        api_key_env = os.getenv('BSCSCAN_API_KEY')
-
-    if not api_key_env:
-        return jsonify({'error': f'API key for {data["network"]} not found'}), 400
-
     try:
         # Start fetching in a separate thread
         jobs[job_id] = {
@@ -96,7 +86,7 @@ def fetch_contract():
 
         threading.Thread(
             target=fetch_contract_thread,
-            args=(job_id, data['network'], data['address'], api_key_env, output_file)
+            args=(job_id, data['network'], data['address'],output_file)
         ).start()
 
         return jsonify({
@@ -107,9 +97,9 @@ def fetch_contract():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-def fetch_contract_thread(job_id, network, address, api_key, output_file):
+def fetch_contract_thread(job_id, network, address, output_file):
     try:
-        fetch_and_flatten_contract(network, address, api_key, output_file)
+        fetch_and_flatten_contract(network, address, output_file)
         jobs[job_id].update({
             'status': 'fetched',
             'contract_path': output_file,
@@ -563,8 +553,8 @@ class SocketIOAgentCoordinator(AgentCoordinator):
             contract_info["source_code"], vulnerabilities
         )
 
-        # Count high confidence vulnerabilities
-        high_conf_count = len([v for v in rechecked_vulns if v.get("skeptic_confidence", 0) > 0.5])
+        # Count high confidence vulnerabilities - with float conversion for safety
+        high_conf_count = len([v for v in rechecked_vulns if float(v.get("skeptic_confidence", 0)) > 0.5])
 
         # Emit status with results summary
         socketio.emit('agent_status', {
@@ -583,9 +573,9 @@ class SocketIOAgentCoordinator(AgentCoordinator):
 
         # 3. Generate PoCs for high-confidence vulnerabilities
         generated_pocs = []
-        high_conf_vulns = [v for v in rechecked_vulns if v.get("skeptic_confidence", 0) > 0.5]
 
         # Generate for only one for now
+        high_conf_vulns = [v for v in rechecked_vulns if float(v.get("skeptic_confidence", 0)) > 0.5]
         if high_conf_vulns:
             for i, vul in enumerate(high_conf_vulns):
                 # EXPLOITER AGENT

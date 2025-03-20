@@ -152,6 +152,7 @@ const ContractInput = ({ onContractSubmit }) => {
               <option value="ethereum">Ethereum</option>
               <option value="bsc">Binance Smart Chain</option>
               <option value="base">Base</option>
+              <option value="arbitrum">Arbitrum</option>
             </select>
           </div>
 

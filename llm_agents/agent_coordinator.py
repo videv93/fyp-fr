@@ -84,7 +84,7 @@ class AgentCoordinator:
 
         # 3. Generate PoCs for high-confidence vulnerabilities
         generated_pocs = []
-        high_conf_vulns = [v for v in rechecked_vulns if v.get("skeptic_confidence", 0) > 0.5]
+        high_conf_vulns = [v for v in rechecked_vulns if float(v.get("skeptic_confidence", 0)) > 0.5]
 
         # Generate for only one for now
         if high_conf_vulns:
