@@ -15,78 +15,89 @@ https://github.com/user-attachments/assets/8360a8b6-4ca0-49d3-be3c-94c195b3c5a3
 
 ## Architecture
 
-The project is divided into two main components:
+The project implements a multi-agent system for smart contract vulnerability detection and exploit generation, utilizing Retrieval-Augmented Generation (RAG) and a coordinated pipeline of specialized agents. Here's how the system works:
 
-1. **Static Analysis**: Parses and analyzes Solidity contracts to extract detailed information and detect potential issues.
-2. **LLM Agents**: Uses language models to interpret static analysis results, identify vulnerabilities, and suggest exploit strategies.
+1. **Static Analysis & RAG System**:
+   - Parses Solidity contracts using Slither for initial static analysis
+   - Maintains a knowledge base of known vulnerabilities in Pinecone Vector DB
+   - Uses RAG to enhance vulnerability detection with historical context
+
+2. **Agent Pipeline**:
+   - **AgentCoordinator**: Orchestrates the multi-agent workflow and manages agent interactions
+   - **Analysis Flow**:
+     1. AnalyzerAgent: Initial vulnerability detection using RAG and LLM analysis
+     2. SkepticAgent: Validates findings to reduce false positives
+     3. ExploiterAgent: Generates exploit strategies for confirmed vulnerabilities
+     4. GeneratorAgent: Creates concrete PoC exploits
+     5. ExploitRunner: Executes and validates the generated exploits
 
 ```mermaid
 graph TB
-    subgraph "Core Application"
-        main["main.py"]
-        static["Static Analysis"]
-        parse["parse_contract.py"]
-        slither["Slither Detectors"]
-    end
-
+    %% Core Components
+    contract["Smart Contract"] --> coord["AgentCoordinator"]
+    
     subgraph "Knowledge Base"
-        docdb["RAG System<br/>doc_db.py"]
         pinecone["Pinecone Vector DB"]
-        vulncat["vulnerability_categories.json"]
+        vulncat["Vulnerability Categories"]
+        known_vulns["Known Vulnerabilities"]
     end
 
-    subgraph "LLM Agents"
-        coord["AgentCoordinator"]
-
-        subgraph "Analysis Pipeline"
-            analyzer["AnalyzerAgent<br/>(Initial Detection)"]
-            skeptic["SkepticAgent<br/>(Validation)"]
-            exploiter["ExploiterAgent<br/>(Exploit Planning)"]
-            generator["GeneratorAgent<br/>(PoC Generation)"]
-        end
+    subgraph "Agent Pipeline"
+        direction LR
+        analyzer["AnalyzerAgent"]
+        skeptic["SkepticAgent"]
+        exploiter["ExploiterAgent"]
+        generator["GeneratorAgent"]
+        runner["ExploitRunner"]
+        
+        analyzer --> |"Potential Vulns"| skeptic
+        skeptic --> |"Validated Vulns"| exploiter
+        exploiter --> |"Exploit Plan"| generator
+        generator --> |"PoC Code"| runner
     end
 
-    subgraph "Utilities"
-        print["print_utils.py"]
-        fetcher["source_code_fetcher.py"]
-    end
-
-    subgraph "External Services"
-        openai["OpenAI API"]
-        blockchain["Blockchain Explorers<br/>(Etherscan/BSCScan)"]
-    end
-
-    %% Main Data Flow
-    main --> static
-    static --> parse
-    parse --> slither
-
-    %% Knowledge Base Flow
-    vulncat --> analyzer
-    docdb --> pinecone
+    %% RAG System Integration
     pinecone --> analyzer
+    vulncat --> analyzer
+    known_vulns --> pinecone
 
-    %% Agent Pipeline Flow
-    main --> coord
+    %% Coordinator Flow
     coord --> analyzer
-    analyzer --> skeptic
-    skeptic --> exploiter
-    exploiter --> generator
+    coord --> skeptic
+    coord --> exploiter
+    coord --> generator
+    coord --> runner
 
-    %% Utility Usage
-    fetcher --> blockchain
-    print --> main
-    print --> coord
-
-    %% External Service Integration
+    %% Model Configuration
+    config["ModelConfig"] --> coord
+    
+    %% External Services
+    subgraph "LLM Services"
+        openai["OpenAI API"]
+    end
+    
     analyzer --> openai
     skeptic --> openai
     exploiter --> openai
     generator --> openai
 
-    %% Output Generation
-    generator --> |"Generate PoC"|main
+    %% Output
+    runner --> |"Execution Results"| coord
+    coord --> |"Final Report"| output["Vulnerability Report"]
+
+    style coord fill:#f9f,stroke:#333,stroke-width:2px
+    style analyzer fill:#bbf,stroke:#333
+    style skeptic fill:#bbf,stroke:#333
+    style exploiter fill:#bbf,stroke:#333
+    style generator fill:#bbf,stroke:#333
+    style runner fill:#bbf,stroke:#333
 ```
+
+3. **Key Features**:
+   - **Configurable Models**: Each agent can use different LLM models based on task requirements
+   - **RAG Enhancement**: Uses similar historical vulnerabilities to improve detection accuracy
+   - **Progressive Validation**: Multi-stage verification process reduces false positives
+   - **Automated Exploitation**: Generates and validates concrete exploit code
 
 ## Prerequisites
 
