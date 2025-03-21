@@ -72,6 +72,9 @@ def fetch_contract():
     data = request.json
     if not data or 'address' not in data or 'network' not in data:
         return jsonify({'error': 'Address and network are required'}), 400
+    
+    # Check for save_separate parameter, default to True if not specified
+    save_separate = data.get('saveSeparate', True)
 
     job_id = str(uuid.uuid4())
     output_file = os.path.join(UPLOAD_FOLDER, f"{job_id}_contract.sol")
@@ -86,7 +89,7 @@ def fetch_contract():
 
         threading.Thread(
             target=fetch_contract_thread,
-            args=(job_id, data['network'], data['address'],output_file)
+            args=(job_id, data['network'], data['address'], output_file, save_separate)
         ).start()
 
         return jsonify({
@@ -97,13 +100,27 @@ def fetch_contract():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-def fetch_contract_thread(job_id, network, address, output_file):
+def fetch_contract_thread(job_id, network, address, output_file, save_separate=True):
     try:
-        fetch_and_flatten_contract(network, address, output_file)
+        contract_files_map = fetch_and_flatten_contract(
+            network=network, 
+            contract_address=address, 
+            output_file=output_file,
+            flatten=True,
+            save_separate=save_separate
+        )
+        
+        # Determine if we have a contracts directory for additional analysis
+        contracts_dir = None
+        if save_separate and contract_files_map:
+            contracts_dir = f"{os.path.splitext(output_file)[0]}_contracts"
+        
         jobs[job_id].update({
             'status': 'fetched',
             'contract_path': output_file,
-            'filename': f"{address}.sol"
+            'filename': f"{address}.sol",
+            'contracts_dir': contracts_dir,
+            'save_separate': save_separate
         })
         socketio.emit('contract_fetched', {'job_id': job_id, 'status': 'fetched'})
     except Exception as e:
@@ -246,6 +263,34 @@ def analyze_thread(job_id, contract_path, model_config, auto_run_config, use_rag
             "source_code": source_code,
             "detector_results": detector_results,
         }
+        
+        # Add contracts directory for inter-contract analysis if available
+        job = jobs.get(job_id, {})
+        if job.get('contracts_dir') and os.path.isdir(job['contracts_dir']):
+            contract_info["contracts_dir"] = job['contracts_dir']
+            
+            # Count contracts to provide more detailed feedback
+            # Get contract count information - recursively search for all .sol files
+            sol_files = []
+            for root, _, files in os.walk(job['contracts_dir']):
+                sol_files.extend([os.path.join(root, f) for f in files if f.endswith('.sol')])
+            contract_count = len(sol_files)
+            
+            # Emit initial status that LLM ProjectContextAgent is starting
+            socketio.emit('agent_active', {
+                'job_id': job_id,
+                'agent': 'project_context_llm',
+                'status': 'Starting LLM-powered inter-contract analysis',
+                'detail': f"LLM-powered ProjectContextAgent will analyze {contract_count} contracts for relationships"
+            })
+            
+            # After a brief delay, update with more details
+            socketio.emit('agent_status', {
+                'job_id': job_id,
+                'agent': 'project_context_llm',
+                'status': 'LLM analyzing contract relationships',
+                'detail': f"Autonomously exploring contracts in {os.path.basename(job['contracts_dir'])}"
+            })
 
         # Initialize agent coordinator using SocketIOAgentCoordinator to emit events
         coordinator = SocketIOAgentCoordinator(
@@ -451,8 +496,102 @@ class SocketIOAgentCoordinator(AgentCoordinator):
 
         # Configure runner's max retries
         self.runner.max_retries = auto_run_config.get("max_retries", 3)
-
-        # 1. Analyzer => all vulnerabilities
+        
+        # 1. ProjectContextLLMAgent => inter-contract relationships
+        if "contracts_dir" in contract_info and contract_info["contracts_dir"]:
+            print(f"Emitting agent_active event for project_context_llm for job {self.job_id}")
+            socketio.emit('agent_active', {
+                'job_id': self.job_id,
+                'agent': 'project_context_llm',
+                'status': 'Initializing inter-contract analysis',
+                'detail': 'Starting LLM-powered analysis of contract relationships...'
+            })
+            
+            # Emit status update before calling the ProjectContextLLMAgent
+            socketio.emit('agent_status', {
+                'job_id': self.job_id,
+                'agent': 'project_context_llm',
+                'status': 'Analyzing contract relationships',
+                'detail': 'LLM is exploring contract relationships and dependencies'
+            })
+            
+            # Pass the job_id to the ProjectContextLLMAgent for socketio updates
+            self.project_context.job_id = self.job_id
+            
+            # Run the project context analysis
+            project_context_results = self.project_context.analyze_project(
+                contract_info["contracts_dir"],
+                contract_info.get("call_graph")
+            )
+            
+            # Extract all insights from the enhanced project context structure
+            insights = project_context_results.get("insights", [])
+            dependencies = project_context_results.get("dependencies", [])
+            vulnerabilities = project_context_results.get("vulnerabilities", [])
+            recommendations = project_context_results.get("recommendations", [])
+            important_functions = project_context_results.get("important_functions", [])
+            stats = project_context_results.get("stats", {})
+            contract_files = project_context_results.get("contract_files", [])
+            
+            # Prepare comprehensive insight details for the frontend
+            insight_details = {
+                'insights': insights[:15],  # General insights
+                'dependencies': dependencies[:15],  # Contract dependencies and relationships
+                'vulnerabilities': vulnerabilities[:15],  # Potential vulnerabilities
+                'recommendations': recommendations[:15],  # Security recommendations
+                'important_functions': important_functions[:15],  # Important cross-contract functions
+                'contract_files': contract_files[:10],  # List of contract files analyzed
+                'stats': {
+                    'total_contracts': stats.get('total_contracts', 0),
+                    'total_relationships': stats.get('total_relationships', 0),
+                    'total_vulnerabilities': stats.get('total_vulnerabilities', 0),
+                    'total_recommendations': stats.get('total_recommendations', 0)
+                }
+            }
+            
+            # Emit comprehensive insights to frontend
+            socketio.emit('project_context_insights', {
+                'job_id': self.job_id,
+                'details': insight_details
+            })
+            
+            # Emit status updates for each type of finding
+            if vulnerabilities:
+                socketio.emit('agent_status', {
+                    'job_id': self.job_id,
+                    'agent': 'project_context_llm',
+                    'status': 'Identified potential vulnerabilities',
+                    'detail': f'Found {len(vulnerabilities)} potential security issues in contract interactions'
+                })
+            
+            if important_functions:
+                socketio.emit('agent_status', {
+                    'job_id': self.job_id,
+                    'agent': 'project_context_llm',
+                    'status': 'Identified key functions',
+                    'detail': f'Found {len(important_functions)} important cross-contract functions'
+                })
+            
+            # Mark the project context agent as complete with a more comprehensive summary
+            summary = f'Analyzed {stats.get("total_contracts", 0)} contracts with '
+            parts = []
+            if insights: parts.append(f'{len(insights)} insights')
+            if dependencies: parts.append(f'{len(dependencies)} dependencies')
+            if vulnerabilities: parts.append(f'{len(vulnerabilities)} potential vulnerabilities')
+            if recommendations: parts.append(f'{len(recommendations)} recommendations')
+            
+            summary += ', '.join(parts)
+            
+            socketio.emit('agent_complete', {
+                'job_id': self.job_id,
+                'agent': 'project_context_llm',
+                'result': summary
+            })
+            
+            # Add project context to contract_info for the analyzer
+            contract_info["project_context"] = project_context_results
+        
+        # 2. Analyzer => all vulnerabilities
         print(f"Emitting agent_active event for analyzer for job {self.job_id}")
         socketio.emit('agent_active', {
             'job_id': self.job_id,
@@ -918,4 +1057,4 @@ class SocketIOAgentCoordinator(AgentCoordinator):
 
 if __name__ == '__main__':
     # Match the port with your socket in the frontend
-    socketio.run(app, debug=True, host='0.0.0.0', port=3000)
+    socketio.run(app, debug=True, host='0.0.0.0', port=3000, allow_unsafe_werkzeug=True)

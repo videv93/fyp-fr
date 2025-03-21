@@ -25,6 +25,14 @@ def parse_arguments():
     # Add contract file option
     parser.add_argument("--contract", default="static_analysis/test_contracts/sample3.sol",
                       help="Path to contract file to analyze")
+    parser.add_argument("--contract-address", 
+                      help="Blockchain contract address to fetch and analyze")
+    parser.add_argument("--network", default="ethereum",
+                      help="Blockchain network (ethereum, bsc, base, arbitrum)")
+    parser.add_argument("--project-dir", action="store_true",
+                      help="Process a multi-contract project directory")
+    parser.add_argument("--save-separate", action="store_true",
+                      help="Save separate contract files in addition to flattened file")
 
     # Add auto-run options
     parser.add_argument("--no-auto-run", action="store_true",
@@ -112,6 +120,24 @@ def main():
     with open("static_analysis/test_contracts/contract_vulns.json", "w") as f:
         json.dump(detector_results, f, indent=4)
 
+    # Read contract source or fetch from blockchain
+    contract_files_map = {}
+    if args.contract_address:
+        from utils.source_code_fetcher import fetch_and_flatten_contract
+        output_file = f"static_analysis/test_contracts/{args.contract_address}.sol"
+        
+        # Fetch contract with both flattened and separate outputs
+        contract_files_map = fetch_and_flatten_contract(
+            network=args.network,
+            contract_address=args.contract_address,
+            output_file=output_file,
+            flatten=True,
+            save_separate=args.save_separate
+        )
+        
+        # Update filepath to the fetched contract
+        filepath = output_file
+    
     # Read contract source
     with open(filepath, "r", encoding="utf-8") as f:
         source_code = f.read()
@@ -123,6 +149,20 @@ def main():
         "source_code": source_code,
         "detector_results": detector_results,
     }
+    
+    # Add contracts directory path if separate files were saved
+    if args.save_separate and contract_files_map:
+        contracts_dir = f"{os.path.splitext(filepath)[0]}_contracts"
+        if os.path.isdir(contracts_dir):
+            contract_info["contracts_dir"] = contracts_dir
+            print_step(f"Added contracts directory for inter-contract analysis: {contracts_dir}")
+            
+            # Get contract count information - recursively search for all .sol files
+            sol_files = []
+            for root, _, files in os.walk(contracts_dir):
+                sol_files.extend([os.path.join(root, f) for f in files if f.endswith('.sol')])
+            contract_count = len(sol_files)
+            print_step(f"LLM-powered ProjectContextAgent will analyze {contract_count} contracts for inter-contract relationships")
 
     # Run LLM analysis
     print_header("Running LLM Analysis")

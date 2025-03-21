@@ -31,7 +31,10 @@ def _solidity_function_node(solidity_function: SolidityFunction) -> str:
 
 
 # return dot language string to add graph edge
-def _edge(from_node: str, to_node: str) -> str:
+def _edge(from_node: str, to_node: str, is_inter_contract: bool = False) -> str:
+    if is_inter_contract:
+        # Use a dashed red line with a label for inter-contract calls
+        return f'"{from_node}" -> "{to_node}" [style="dashed", color="red", label="Inter-Contract"]'
     return f'"{from_node}" -> "{to_node}"'
 
 
@@ -130,11 +133,15 @@ def _process_external_call(
                 external_function.name,
             )
         )
-
+    
+    # Check if this is an inter-contract call (different contracts)
+    is_inter_contract = contract.name != external_contract.name
+    
     external_calls.add(
         _edge(
             _function_node(contract, function),
             _function_node(external_contract, external_function),
+            is_inter_contract
         )
     )
 

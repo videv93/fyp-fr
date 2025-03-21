@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunksmartcontract_analyzer_frontend=self.webpackChunksmartcontract_analyzer_frontend||[]).push([[71],{56071:(e,r,t)=>{t.d(r,{createArchitectureServices:()=>a.S});var a=t(36677);t(16660)}}]);

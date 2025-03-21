@@ -72,6 +72,11 @@ const AgentVisualizer = ({ activeAgent, status, completedAgents = [], agentDetai
       description: "Running static analysis tools",
     },
     {
+      id: "project_context_llm",
+      label: "Context Analysis",
+      description: "Analyzing inter-contract relationships",
+    },
+    {
       id: "analyzer",
       label: "Analyzer Agent",
       description: "Detecting potential vulnerabilities",

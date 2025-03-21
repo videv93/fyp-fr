@@ -13,6 +13,7 @@ from .agents.exploiter import ExploiterAgent
 from .agents.generator import GeneratorAgent
 from .agents.skeptic import SkepticAgent
 from .agents.runner import ExploitRunner
+from .agents.project_context_llm import ProjectContextLLMAgent
 from .config import ModelConfig
 
 from utils.print_utils import print_step, print_success, print_warning
@@ -40,6 +41,7 @@ class AgentCoordinator:
         else:
             self.vuln_retriever = None
 
+        self.project_context = ProjectContextLLMAgent(model_config=self.model_config)
         self.analyzer = AnalyzerAgent(self.vuln_retriever, model_config=self.model_config)
         self.skeptic = SkepticAgent(model_config=self.model_config)
         self.exploiter = ExploiterAgent(model_config=self.model_config)
@@ -57,8 +59,41 @@ class AgentCoordinator:
         # Configure runner's max retries
         self.runner.max_retries = auto_run_config.get("max_retries", 3)
 
-        # 1. Analyzer => all vulnerabilities
-        console.print("[bold blue]🔍 AnalyzerAgent: Starting initial vulnerability detection...[/bold blue]")
+        # 1. ProjectContextLLMAgent => inter-contract relationships
+        if "contracts_dir" in contract_info and contract_info["contracts_dir"]:
+            console.print("[bold blue]🔍 ProjectContextLLMAgent: Analyzing contract relationships...[/bold blue]")
+            project_context_results = self.project_context.analyze_project(
+                contract_info["contracts_dir"],
+                contract_info.get("call_graph")
+            )
+            
+            # Display the project context insights
+            insights = project_context_results.get("insights", [])
+            dependencies = project_context_results.get("dependencies", [])
+            if insights or dependencies:
+                console.print(f"[bold green]✓ ProjectContextLLMAgent: Found {len(insights)} insights and {len(dependencies)} dependencies[/bold green]")
+                
+                if insights:
+                    console.print("[bold]Key insights:[/bold]")
+                    for i, insight in enumerate(insights[:3]):  # Show top 3 insights
+                        console.print(f"  - {insight}")
+                    if len(insights) > 3:
+                        console.print(f"  - ...and {len(insights) - 3} more insights")
+                
+                if dependencies:
+                    console.print("[bold]Important dependencies:[/bold]")
+                    for i, dep in enumerate(dependencies[:3]):  # Show top 3 dependencies
+                        console.print(f"  - {dep}")
+                    if len(dependencies) > 3:
+                        console.print(f"  - ...and {len(dependencies) - 3} more dependencies")
+            else:
+                console.print("[bold yellow]ProjectContextLLMAgent: No significant insights found[/bold yellow]")
+                
+            # Add project context to contract_info for the analyzer
+            contract_info["project_context"] = project_context_results
+
+        # 2. Analyzer => all vulnerabilities
+        console.print("\n[bold blue]🔍 AnalyzerAgent: Starting vulnerability detection...[/bold blue]")
         vuln_results = self.analyzer.analyze(contract_info)
         vulnerabilities = vuln_results.get("vulnerabilities", [])
         if not vulnerabilities:

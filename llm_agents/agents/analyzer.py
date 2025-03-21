@@ -6,9 +6,10 @@ from pathlib import Path
 import json
 import logging
 import os
-from utils.print_utils import print_step, print_warning, create_progress_spinner
+from utils.print_utils import print_warning, create_progress_spinner
 from openai import OpenAI
 from langchain.schema import Document
+from .project_context_llm import ProjectContextLLMAgent
 
 logger = logging.getLogger(__name__)
 
@@ -184,6 +185,22 @@ class AnalyzerAgent:
                 f"Detection Strategy: {guidance['detection_strategy']}\n\n"
             )
 
+        # Inter-contract context if it was provided from previous stage
+        inter_contract_section = ""
+        if "project_context" in contract_info:
+            # Use the project_context that was already analyzed and provided
+            context = contract_info["project_context"]
+            
+            # Get ProjectContextLLMAgent to generate the prompt section
+            project_context_agent = ProjectContextLLMAgent(self.model_config)
+            inter_contract_section = project_context_agent.generate_prompt_section(context)
+            
+            # Log completion
+            stats = context.get('stats', {})
+            total_contracts = stats.get('total_contracts', 0)
+            total_relationships = stats.get('total_relationships', 0)
+            logger.info(f"Using pre-analyzed project context with {total_contracts} contracts and {total_relationships} relationships")
+        
         # Task instructions
         instructions = """\
 TASK:
@@ -227,9 +244,12 @@ Format findings as:
         full_prompt = (
             contract
             + summary
-            + category_guidance
             + snippet_text
             + detector_section
+            + "\n"
+            + inter_contract_section
+            + "\n"
+            + category_guidance
             + "\n"
             + instructions
         )
