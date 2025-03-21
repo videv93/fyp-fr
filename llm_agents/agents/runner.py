@@ -21,7 +21,7 @@ class ExploitRunner:
         from ..config import ModelConfig
 
         self.model_config = model_config or ModelConfig()
-        self.model_name = self.model_config.get_model("analyzer")
+        self.model_name = self.model_config.get_model("generator")
 
         # Get provider info for the selected model
         _, api_key_env, _ = self.model_config.get_provider_info(self.model_name)

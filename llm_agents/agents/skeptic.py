@@ -17,7 +17,7 @@ class SkepticAgent:
         from ..config import ModelConfig
 
         self.model_config = model_config or ModelConfig()
-        self.model_name = self.model_config.get_model("analyzer")
+        self.model_name = self.model_config.get_model("skeptic")
 
         # Get provider info for the selected model
         _, api_key_env, _ = self.model_config.get_provider_info(self.model_name)
@@ -44,6 +44,7 @@ class SkepticAgent:
     2. Preconditions - What conditions must be met for this to be exploited?
     3. Practical impact - What would be the consequence if exploited?
     4. Implementation details - Is the code actually vulnerable in the way described?
+    5. Common vulnerability patterns - Does this match known vulnerability patterns?
 
     For each alleged vulnerability, determine:
       1) Is it a genuine vulnerability that warrants attention?

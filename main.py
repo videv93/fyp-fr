@@ -41,6 +41,7 @@ def parse_arguments():
                       help="Skip PoC generation and stop at exploit plans")
     parser.add_argument("--export-md", action="store_true",
                       help="Export analysis report as Markdown file")
+    parser.add_argument("--export-json", help="Export results to a JSON file for automated analysis")
 
     return parser.parse_args()
 
@@ -235,6 +236,10 @@ def main():
     # Export results to markdown if configured
     if model_config.export_markdown:
         export_results_to_markdown(filepath, results)
+        
+    # Export results to JSON if requested
+    if args.export_json:
+        export_results_to_json(filepath, results, args.export_json)
 
 def export_results_to_markdown(contract_path, results):
     """Export analysis results to a markdown file"""
@@ -388,6 +393,46 @@ def export_results_to_markdown(contract_path, results):
         f.write("*This report was generated automatically by the Smart Contract Vulnerability Analyzer.*\n")
     
     print_success(f"Report exported to {output_file}")
+
+# Function to export results to JSON for automated analysis
+def export_results_to_json(filepath, results, output_file):
+    """Export analysis results to a JSON file"""
+    import json
+    
+    # Create a serializable results dictionary
+    export_data = {
+        "contract_path": filepath,
+        "rechecked_vulnerabilities": results.get("rechecked_vulnerabilities", []),
+        "generated_pocs": []
+    }
+    
+    # Process PoC data for serialization
+    for poc in results.get("generated_pocs", []):
+        poc_data = {
+            "vulnerability": poc.get("vulnerability", {}),
+            "exploit_plan": poc.get("exploit_plan", {}),
+        }
+        
+        if "poc_data" in poc:
+            poc_data["poc_data"] = {
+                "exploit_file": poc["poc_data"].get("exploit_file", ""),
+                "execution_command": poc["poc_data"].get("execution_command", ""),
+            }
+            
+            if "execution_results" in poc["poc_data"]:
+                poc_data["poc_data"]["execution_results"] = {
+                    "success": poc["poc_data"]["execution_results"].get("success", False),
+                    "retries": poc["poc_data"]["execution_results"].get("retries", 0),
+                    "error": poc["poc_data"]["execution_results"].get("error", "")
+                }
+        
+        export_data["generated_pocs"].append(poc_data)
+    
+    # Write to file
+    with open(output_file, "w") as f:
+        json.dump(export_data, f, indent=2)
+        
+    print_success(f"Results exported to {output_file}")
 
 if __name__ == "__main__":
     main()
