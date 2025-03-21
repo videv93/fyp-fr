@@ -16,6 +16,7 @@ repomix-output.txt
 # Test files
 static_analysis/test_contracts
 
+frontend_poc/uploads
 
 # Node modules
 node_modules
@@ -23,3 +24,11 @@ static_analysis/test_contracts/sample.sol
 
 # benchmark files
 benchmark_data
+benchmark_data_no_errors
+
+# Exploit PoCs
+exploit/src/test
+
+# Logs
+benchmark_evaluation.log
+ctfbench_evaluation.log
