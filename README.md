@@ -5,6 +5,14 @@ This project utilises a multi-agent workflow to identify vulnerabilities and gen
 https://github.com/user-attachments/assets/8360a8b6-4ca0-49d3-be3c-94c195b3c5a3
 
 
+## Component Documentation
+
+| Component | Description | Detailed Documentation |
+|-----------|-------------|----------------------|
+| Static Analysis | Contract parsing and vulnerability detection using Slither | [README_STATIC_ANALYSIS.md](README_STATIC_ANALYSIS.md) |
+| LLM Agents | Multi-agent system for vulnerability analysis and exploit generation | [README_LLM_AGENTS.md](README_LLM_AGENTS.md) |
+| RAG System | Retrieval-Augmented Generation for enhanced vulnerability detection | [README_RAG.md](README_RAG.md) |
+
 ## Features
 
 - **Static Analysis**: Utilizes Slither to parse and analyze Solidity contracts, extracting function details and generating call graphs.
