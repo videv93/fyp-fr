@@ -85,20 +85,20 @@ graph TB
     runner --> |"Execution Results"| coord
     coord --> |"Final Report"| output["Vulnerability Report"]
 
-    style coord fill:#e6b3ff,stroke:#333,stroke-width:2px
-    style analyzer fill:#b3d9ff,stroke:#333
-    style skeptic fill:#b3d9ff,stroke:#333
-    style exploiter fill:#b3d9ff,stroke:#333
-    style generator fill:#b3d9ff,stroke:#333
-    style runner fill:#b3d9ff,stroke:#333
-    style contract fill:#d9f2d9,stroke:#333
-    style output fill:#ffe6cc,stroke:#333
-    style config fill:#ffcccc,stroke:#333
+    style coord fill:#e6b3ff,stroke:#000,stroke-width:2px,color:#000
+    style analyzer fill:#b3d9ff,stroke:#000,color:#000
+    style skeptic fill:#b3d9ff,stroke:#000,color:#000
+    style exploiter fill:#b3d9ff,stroke:#000,color:#000
+    style generator fill:#b3d9ff,stroke:#000,color:#000
+    style runner fill:#b3d9ff,stroke:#000,color:#000
+    style contract fill:#d9f2d9,stroke:#000,color:#000
+    style output fill:#ffe6cc,stroke:#000,color:#000
+    style config fill:#ffcccc,stroke:#000,color:#000
     
-    style pinecone fill:#ffecb3,stroke:#333
-    style vulncat fill:#ffecb3,stroke:#333
-    style known_vulns fill:#ffecb3,stroke:#333
-    style openai fill:#e6ffcc,stroke:#333
+    style pinecone fill:#ffecb3,stroke:#000,color:#000
+    style vulncat fill:#ffecb3,stroke:#000,color:#000
+    style known_vulns fill:#ffecb3,stroke:#000,color:#000
+    style openai fill:#e6ffcc,stroke:#000,color:#000
 ```
 
 3. **Key Features**:
