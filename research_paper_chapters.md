@@ -121,6 +121,37 @@ Figure 3.2 illustrates a sample call graph generated for a multi-contract projec
 ![Figure 3.2: Call Graph Visualization](call_graph.png)
 *Figure 3.2: Call Graph showing function calls within and between contracts*
 
+The call graph is generated in DOT format, which can be visualized using tools like Graphviz:
+
+```dot
+strict digraph {
+subgraph cluster_0_VulnerableLendingContract {
+label = "VulnerableLendingContract"
+"0_deposit" [label="deposit"]
+"0_withdraw" [label="withdraw"]
+"0_getBalance" [label="getBalance"]
+"0_contractBalance" [label="contractBalance"]
+}
+subgraph cluster_1_Token {
+label = "Token"
+"1_transfer" [label="transfer"]
+"1_approve" [label="approve"]
+"1_transferFrom" [label="transferFrom"]
+"1__transfer" [label="_transfer"]
+"1_mint" [label="mint"]
+"1_burn" [label="burn"]
+"1_getCurrentPrice" [label="getCurrentPrice"]
+"1_getPoolLiquidity" [label="getPoolLiquidity"]
+"1_transfer" -> "1__transfer"
+"1_transferFrom" -> "1__transfer"
+}
+// More contracts and relationships...
+"1_getCurrentPrice" -> "2_getPrice" [style="dashed", color="red", label="Inter-Contract"]
+"3_borrow" -> "2_getPrice" [style="dashed", color="red", label="Inter-Contract"]
+"3_isHealthy" -> "2_getPrice" [style="dashed", color="red", label="Inter-Contract"]
+}
+```
+
 The call graph serves multiple purposes:
 1. Helps identify potential attack vectors through function call sequences
 2. Reveals complex dependencies that might be overlooked in manual code review
@@ -197,11 +228,40 @@ Example prompt structure:
 system_prompt = (
     "You are a smart contract security expert tasked with analyzing a multi-contract project. "
     "Your goal is to identify security-relevant relationships and interactions between contracts, "
-    "including potential vulnerabilities arising from inter-contract calls, inheritance, permissions, and data flows."
+    "including potential vulnerabilities arising from inter-contract calls, inheritance, permissions, and data flows.\n\n"
+    "Return your analysis strictly as a JSON object with exactly the following keys (do not include any additional text):\n"
+    "  - 'insights': a list of high-level security insights (strings) about the project.\n"
+    "  - 'dependencies': a list of strings describing inter-contract relationships (e.g., 'ContractA calls ContractB').\n"
+    "  - 'vulnerabilities': a list of potential vulnerability issues (strings) related to inter-contract interactions.\n"
+    "  - 'important_functions': a list of critical function names (with contract prefixes if applicable) involved in inter-contract interactions.\n"
+    "  - 'recommendations': a list of security recommendations (strings) for improving contract interactions.\n"
+    "  - 'mermaid_diagram': a string containing a Mermaid diagram in 'graph TD' notation representing the contract relationships."
 )
 ```
 
-The agent returns structured insights such as contract dependencies, critical functions, and potential vulnerabilities resulting from contract interactions.
+The agent returns structured insights such as contract dependencies, critical functions, and potential vulnerabilities resulting from contract interactions. A sample output from analyzing a DeFi lending system:
+
+```json
+{
+  "insights": [
+    "The system follows a standard DeFi lending pattern with Token, PriceOracle, and LendingPool components",
+    "The Token contract depends on external PriceOracle and DEXPair contracts for price discovery",
+    "The LendingPool relies on the PriceOracle for critical financial calculations including loan collateralization",
+    "Multiple contracts share trust relationships without adequate security boundaries"
+  ],
+  "dependencies": [
+    "Token.getCurrentPrice() calls PriceOracle.getPrice()",
+    "Token.getPoolLiquidity() calls DEXPair.getReserves()",
+    "LendingPool.deposit() calls Token.transferFrom()",
+    "LendingPool.withdraw() calls Token.transfer()"
+  ],
+  "vulnerabilities": [
+    "PriceOracle.updatePrice() lacks access control, allowing anyone to manipulate prices",
+    "PriceOracle.getPriceFromPair() is vulnerable to flash loan price manipulation",
+    "LendingPool doesn't verify Token.transfer() success in borrow()"
+  ]
+}
+```
 
 ### 3.3.3 Vulnerability Analysis (Analyzer) Agent
 
@@ -232,11 +292,29 @@ system_prompt = (
 )
 ```
 
-The agent returns a list of potential vulnerabilities, each with:
-- Vulnerability type classification
-- Affected functions
-- Reasoning that explains why the code is vulnerable
-- Initial confidence score
+The agent returns a list of potential vulnerabilities. Here's an example output analyzing our VulnerableLendingContract:
+
+```json
+{
+  "vulnerabilities": [
+    {
+      "vulnerability_type": "reentrancy",
+      "confidence_score": 0.85,
+      "reasoning": "The withdraw function in VulnerableLendingContract contains a classic reentrancy vulnerability. It performs an external call to msg.sender using call{value: amount}(\"\") before updating the sender's balance with balances[msg.sender] -= amount. This allows an attacker to recursively call withdraw again before their balance is updated, potentially draining all funds from the contract.",
+      "affected_functions": ["withdraw"],
+      "impact": "Critical - could result in complete loss of contract funds",
+      "exploitation_scenario": "An attacker could create a malicious contract that calls deposit() with some ETH, then calls withdraw(). During the withdraw call, the fallback function of the attacker contract would recursively call withdraw() again, allowing multiple withdrawals before the balance is updated."
+    },
+    {
+      "vulnerability_type": "unchecked_return_value",
+      "confidence_score": 0.70,
+      "reasoning": "The LendingPool.borrow() function calls Token(token).transfer() without checking the return value. ERC20 transfers can fail silently if implemented incorrectly, leading to a discrepancy between the recorded state and the actual token balances.",
+      "affected_functions": ["borrow"],
+      "impact": "Medium - could lead to accounting inconsistencies",
+      "exploitation_scenario": "If the token transfer fails silently (e.g., due to a token contract that returns false instead of reverting), the LendingPool contract would record a loan without the tokens actually being transferred to the borrower."
+    }
+  ]
+}
 
 ### 3.3.4 Validation (Skeptic) Agent
 
@@ -272,7 +350,26 @@ For each alleged vulnerability, determine:
 """
 ```
 
-The Skeptic's output includes a confidence score and detailed reasoning for each vulnerability, which are used to filter and prioritize findings for exploitation.
+The Skeptic's output includes a confidence score and detailed reasoning for each vulnerability, which are used to filter and prioritize findings for exploitation. Here's an example output from the Skeptic evaluating findings:
+
+```json
+{
+  "rechecked_vulnerabilities": [
+    {
+      "original_idx": 0,
+      "skeptic_confidence": 0.92,
+      "validity_reasoning": "The vulnerability is confirmed with high confidence. The withdraw function does indeed update the user's balance after making an external call, violating the checks-effects-interactions pattern. This is a textbook reentrancy vulnerability that would allow an attacker to recursively call withdraw before their balance is updated. The contract has no reentrancy guards or other protections against this attack. This vulnerability is directly exploitable with minimal setup and would allow an attacker to drain all ETH from the contract."
+    },
+    {
+      "original_idx": 3,
+      "skeptic_confidence": 0.45,
+      "validity_reasoning": "While it's true that the borrow() function doesn't check the return value of Token(token).transfer(), the actual risk is lower than reported. Most modern token implementations (post-EIP-20) will revert on failed transfers rather than returning false, making this less exploitable in practice. Additionally, the Token implementation shown in the context does revert on failed transfers in its _transfer function. This is still poor practice and could cause issues with tokens that don't revert on failure, but it's less severe than the other vulnerabilities identified."
+    }
+  ]
+}
+```
+
+Notice how the Skeptic increased the confidence of the reentrancy vulnerability from 0.85 to 0.92 but decreased the confidence of the unchecked return value issue from 0.70 to 0.45, based on its critical analysis.
 
 ### 3.3.5 Exploit Generation (Exploiter) Agent
 
@@ -284,24 +381,29 @@ The Exploiter Agent (`exploiter.py`) designs attack plans for validated vulnerab
 4. Specifies execution steps that trigger the vulnerability
 5. Provides validation criteria to confirm successful exploitation
 
-The agent structures its output as a formalized plan:
+The agent structures its output as a formalized plan. Here's an actual exploit plan generated for the reentrancy vulnerability:
 
 ```json
 {
-    "plan": {
-        "setup_steps": [
-            "Step 1: Create a test environment that demonstrates the vulnerability",
-            "Step 2: Prepare necessary contracts and accounts for the demonstration"
-        ],
-        "execution_steps": [
-            "Step 1: Demonstrate the normal contract behavior",
-            "Step 2: Demonstrate how the vulnerability could theoretically be triggered"
-        ],
-        "validation_steps": [
-            "Step 1: Explain what security principle was violated",
-            "Step 2: Show how developers can fix this vulnerability"
-        ]
-    }
+  "plan": {
+    "setup_steps": [
+      "Deploy the vulnerable lending contract",
+      "Create an attacker contract with a fallback function that calls withdraw recursively",
+      "Fund the vulnerable contract with ETH for demonstration",
+      "Deposit some ETH from the attacker contract to establish a balance"
+    ],
+    "execution_steps": [
+      "Call withdraw from the attacker contract for the initial amount deposited",
+      "Within the fallback function of the attacker contract, check remaining balance in the vulnerable contract",
+      "If balance remains, recursively call withdraw again",
+      "Continue until vulnerable contract is drained or gas is exhausted"
+    ],
+    "validation_steps": [
+      "Verify attacker contract has more ETH than initially deposited",
+      "Verify vulnerable contract has less ETH than expected",
+      "Demonstrate that fixing the order of operations (updating state before external call) prevents the attack"
+    ]
+  }
 }
 ```
 
@@ -656,7 +758,7 @@ For this high-confidence vulnerability, the Exploiter Agent develops an attack p
 
 ### 3.5.6 Generator Agent
 
-The Generator Agent transforms the exploit plan into executable Foundry test code:
+The Generator Agent transforms the exploit plan into executable Foundry test code. Below is the actual generated test contract for the reentrancy vulnerability, which implements the plan from the Exploiter Agent:
 
 ```solidity
 // SPDX-License-Identifier: UNLICENSED
