@@ -19,6 +19,7 @@ def parse_arguments():
     parser.add_argument("--skeptic-model", default="o3-mini", help="Model for skeptic agent")
     parser.add_argument("--exploiter-model", default="o3-mini", help="Model for exploiter agent")
     parser.add_argument("--generator-model", default="o3-mini", help="Model for generator agent")
+    parser.add_argument("--context-model", default="o3-mini", help="Model for context agent")
     parser.add_argument("--all-models", help="Use this model for all agents")
     parser.add_argument("--api-base", help="Base URL for OpenAI API")
 
@@ -77,6 +78,7 @@ def main():
             skeptic_model=args.all_models,
             exploiter_model=args.all_models,
             generator_model=args.all_models,
+            context_model=args.all_models,
             base_url=args.api_base,
             skip_poc_generation=args.skip_poc,
             export_markdown=args.export_md
@@ -88,6 +90,7 @@ def main():
             skeptic_model=args.skeptic_model,
             exploiter_model=args.exploiter_model,
             generator_model=args.generator_model,
+            context_model=args.context_model,
             base_url=args.api_base,
             skip_poc_generation=args.skip_poc,
             export_markdown=args.export_md
@@ -99,6 +102,7 @@ def main():
     console.print(f"  Skeptic: [bold]{model_config.skeptic_model}[/bold]")
     console.print(f"  Exploiter: [bold]{model_config.exploiter_model}[/bold]")
     console.print(f"  Generator: [bold]{model_config.generator_model}[/bold]")
+    console.print(f"  Context: [bold]{model_config.context_model}[/bold]")
     if args.api_base:
         console.print(f"  API Base URL: [dim]{args.api_base}[/dim]")
     console.print(f"  Skip PoC Generation: [bold]{'Yes' if model_config.skip_poc_generation else 'No'}[/bold]")

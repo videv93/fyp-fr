@@ -173,6 +173,7 @@ def start_analysis():
             'generator_model': model_config.generator_model,
             'skip_poc_generation': model_config.skip_poc_generation,
             'export_markdown': model_config.export_markdown,
+            'context_model': model_config.context_model,
         },
         'auto_run_config': auto_run_config,
         'use_rag': use_rag
