@@ -20,6 +20,8 @@ https://github.com/user-attachments/assets/8360a8b6-4ca0-49d3-be3c-94c195b3c5a3
 - **LLM Integration**: Supports multiple LLM providers (OpenAI, Anthropic, Ollama) with automatic prompt format optimization.
 - **Agent Coordination**: Coordinates between analysis agents to provide comprehensive vulnerability assessments and exploit recommendations.
 - **Model Flexibility**: Configure different models for each agent based on task complexity and performance requirements.
+- **Project Context Analysis**: Employs an LLM-powered agent to analyze inter-contract relationships and provide contextual insights for vulnerability detection.
+- **Multi-Contract Analysis**: Supports the analysis of multiple contracts within a project, identifying potential vulnerabilities arising from their interactions.
 
 ## Architecture
 
@@ -32,6 +34,7 @@ The project implements a multi-agent system for smart contract vulnerability det
 
 2. **Agent Pipeline**:
    - **AgentCoordinator**: Orchestrates the multi-agent workflow and manages agent interactions
+   - **ProjectContextLLMAgent**: Analyzes inter-contract relationships and provides contextual insights for vulnerability detection
    - **Analysis Flow**:
      1. AnalyzerAgent: Initial vulnerability detection using RAG and LLM analysis
      2. SkepticAgent: Validates findings to reduce false positives
@@ -52,12 +55,14 @@ graph TB
 
     subgraph "Agent Pipeline"
         direction LR
+        project_context["ProjectContextLLMAgent"]
         analyzer["AnalyzerAgent"]
         skeptic["SkepticAgent"]
         exploiter["ExploiterAgent"]
         generator["GeneratorAgent"]
         runner["ExploitRunner"]
         
+        project_context --> analyzer
         analyzer --> |"Potential Vulns"| skeptic
         skeptic --> |"Validated Vulns"| exploiter
         exploiter --> |"Exploit Plan"| generator
@@ -70,6 +75,7 @@ graph TB
     known_vulns --> pinecone
 
     %% Coordinator Flow
+    coord --> project_context
     coord --> analyzer
     coord --> skeptic
     coord --> exploiter
@@ -99,6 +105,7 @@ graph TB
     style exploiter fill:#b3d9ff,stroke:#000,color:#000
     style generator fill:#b3d9ff,stroke:#000,color:#000
     style runner fill:#b3d9ff,stroke:#000,color:#000
+    style project_context fill:#b3d9ff,stroke:#000,color:#000
     style contract fill:#d9f2d9,stroke:#000,color:#000
     style output fill:#ffe6cc,stroke:#000,color:#000
     style config fill:#ffcccc,stroke:#000,color:#000
