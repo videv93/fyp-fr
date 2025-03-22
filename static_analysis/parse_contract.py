@@ -6,6 +6,9 @@ from slither.solc_parsing.expressions.find_variable import SolidityFunction
 from .slither_detectors import DETECTORS
 from .call_graph_printer import PrinterCallGraphV2
 from typing import Dict, List
+import json
+import os
+from .extract_contracts import process_contract_file
 
 
 def analyze_contract(filepath: str):
@@ -18,10 +21,23 @@ def analyze_contract(filepath: str):
     solc_remaps = [
         "@openzeppelin=/Users/advait/Desktop/NTU/fyp-fr/static_analysis/node_modules/@openzeppelin"
     ]
+    
+    # Preprocess the contract file - check if it's a JSON bundle and extract if needed
+    temp_dir = None
+    try:
+        # Process the file, potentially extracting contracts if it's a JSON bundle
+        processed_filepath, temp_dir = process_contract_file(filepath)
+        if processed_filepath != filepath:
+            print(f"Preprocessed JSON contract: {filepath} -> {processed_filepath}")
+            filepath = processed_filepath
+    except Exception as e:
+        print(f"Error preprocessing contract: {e}")
+        # Continue with the original filepath
+    
     # Initialize Slither on the given file. This parses and compiles the contract.
     slither = Slither(
         filepath,
-        solc_args="--optimize",
+        solc_args="--via-ir --optimize",
         solc_remaps=solc_remaps,
     )
 
@@ -80,6 +96,13 @@ def analyze_contract(filepath: str):
 
             all_function_details.append(func_detail)
 
+    # Clean up temp directory if we created one
+    if temp_dir and os.path.exists(temp_dir):
+        print(f"Note: Temporary extracted files are in {temp_dir}")
+        # We're not removing the directory to allow for inspection
+        # import shutil
+        # shutil.rmtree(temp_dir)
+        
     return all_function_details, call_graph, detectors_results
 
 
