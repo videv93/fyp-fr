@@ -1,6 +1,80 @@
-# Chapter 3: System Design and Methodology
+# Chapter 3: System Design and Implementation
 
-## 3.1 Architecture Overview
+## 3.1 Chosen Methodology and Design Rationale
+
+The design of the smart contract vulnerability detection and exploitation system reflects several key decisions that optimize it for the complex task of smart contract security analysis:
+
+### 3.1.1 Multi-Agent Approach
+
+The multi-agent design was chosen for its ability to decompose the complex problem of vulnerability analysis into specialized subtasks. This approach:
+
+1. **Leverages Specialization**: Each agent focuses on a specific aspect of the problem, allowing for deeper expertise in narrower domains.
+2. **Implements Checks and Balances**: The Skeptic agent specifically counters the tendency of vulnerability scanners to produce false positives.
+3. **Enables Sequential Refinement**: Information flows from general to specific, with each agent adding value to the previous stage's output.
+
+This approach is supported by research in LLM-based agency (Weng, 2023) and cognitive division of labor in complex reasoning tasks (Karpas et al., 2022).
+
+### 3.1.2 Static Analysis Integration
+
+The decision to use Slither as a foundation for LLM analysis was driven by:
+
+1. **Complementary Strengths**: Static analyzers excel at pattern recognition and control flow analysis, while LLMs provide contextual understanding and reasoning.
+2. **Computational Efficiency**: Using Slither for initial analysis reduces the computational burden on LLMs.
+3. **Structured Guidance**: Slither's output provides structured guidance that helps the LLM focus on relevant code sections.
+
+### 3.1.3 Retrieval-Augmented Generation
+
+The integration of RAG was motivated by:
+
+1. **Factual Grounding**: RAG provides factual examples that reduce hallucination in LLM outputs.
+2. **Domain-Specific Knowledge**: The knowledge base contains specialized information about smart contract vulnerabilities that might not be fully represented in general-purpose LLM training.
+3. **Efficiency**: Retrieving relevant examples allows the LLM to focus on analyzing similar patterns rather than having to identify patterns from scratch.
+
+### 3.1.4 Executable Proof of Concepts
+
+The system generates executable PoCs rather than just theoretical exploit descriptions because:
+
+1. **Concrete Validation**: Executable PoCs provide concrete validation of vulnerability existence.
+2. **Educational Value**: Working demonstrations have superior educational value for developers.
+3. **False Positive Reduction**: The requirement for a working exploit significantly reduces false positives.
+
+### 3.1.5 Self-Healing Capabilities
+
+The Runner agent's ability to fix failing PoCs autonomously addresses a common limitation in automated exploit generation:
+
+1. **Practical Robustness**: LLM-generated code often contains minor errors that would otherwise require human intervention.
+2. **Learning from Failures**: The system improves its understanding by analyzing failed attempts.
+3. **Increased Success Rate**: Iterative improvement significantly increases the success rate of exploit demonstrations.
+
+These design choices collectively enable a system that provides more accurate, actionable, and educational security analysis than either traditional static analyzers or pure LLM-based approaches could achieve independently.
+
+## 3.2 Technology Stack
+
+The system is implemented using a comprehensive stack of modern technologies, chosen for their capabilities and synergies in smart contract security analysis:
+
+| Component | Technology | Description | Justification |
+|-----------|------------|-------------|---------------|
+| **Core Programming** | Python 3.9+ | Primary language for agent system | Ecosystem of ML/AI libraries, language flexibility |
+| | Solidity 0.8.x | Smart contract language | Industry standard for Ethereum contracts |
+| | JavaScript/React | Frontend web interface | Modern UI framework with component-based architecture |
+| **Smart Contract Analysis** | Slither 1.1.0 | Static analysis framework | Established tool with comprehensive vulnerability detection |
+| | Foundry 0.2.0 (Forge, Anvil) | Testing framework | Modern Solidity-based testing environment |
+| | Web3.py 6.0.0 | Ethereum interaction | Robust Python library for blockchain interaction |
+| **LLM Integration** | OpenAI API | GPT model access | State-of-the-art language models (GPT-4, GPT-4o) |
+| | Anthropic API | Claude model access | Alternative provider with strong reasoning capabilities |
+| | LangChain 0.1.0 | LLM application framework | Simplifies RAG implementation and agent construction |
+| **Vector Database** | Pinecone | Knowledge base storage | High-performance vector database for similarity search |
+| | OpenAI Embeddings | Vector representations | Creates semantic embeddings of code and vulnerabilities |
+| **Web Interface** | Flask 2.3.3 | API backend | Lightweight framework for Python-based APIs |
+| | ReactJS 18.2.0 | Frontend library | Component-based UI with efficient rendering |
+| | TailwindCSS 3.3.5 | CSS framework | Utility-first approach for rapid styling |
+| **Development Tools** | Poetry 1.6.1 | Dependency management | Modern Python package management |
+| | Docker 24.0.5 | Containerization | Reproducible deployment environment |
+| | Git 2.40.1 | Version control | Industry standard SCM |
+
+The technology stack was designed for modularity (components can be updated independently), extensibility (new agents or analysis techniques can be added without refactoring), and robustness (industry-standard tools with active maintenance).
+
+## 3.3 Architecture Overview
 
 The smart contract vulnerability detection and exploitation system is designed as a modular, pipeline-based architecture that combines static analysis with advanced LLM-powered agents to detect, validate, and demonstrate vulnerabilities in Solidity smart contracts. Figure 3.1 illustrates the high-level architecture of the system.
 
@@ -27,11 +101,11 @@ The system processes Solidity smart contracts through the following stages:
 
 This pipeline represents a novel approach by integrating traditional static analysis tools with a multi-agent LLM system to provide more comprehensive, accurate, and actionable security information than either approach could achieve independently.
 
-## 3.2 Static Analysis Component
+## 3.4 Static Analysis Component
 
 The static analysis module serves as the foundation of the vulnerability detection process, extracting crucial structural information from smart contracts that guides subsequent LLM-based analysis. This component leverages Slither, an established Solidity static analysis framework, to generate a rich set of contract metadata and preliminary vulnerability indicators.
 
-### 3.2.1 Data Extraction Process
+### 3.4.1 Data Extraction Process
 
 The static analysis component extracts several key elements from the contract code:
 
@@ -80,7 +154,7 @@ def analyze_contract(filepath: str):
     return all_function_details, cfg_data, detectors_results
 ```
 
-### 3.2.2 Multi-Contract Support
+### 3.4.2 Multi-Contract Support
 
 The system extends the traditional single-contract analysis to handle multi-contract projects, essential for modern DeFi and complex smart contract ecosystems. For multi-contract analysis, the system:
 
@@ -114,7 +188,7 @@ def _process_external_call(
     )
 ```
 
-### 3.2.3 Call Graph Visualization
+### 3.4.3 Call Graph Visualization
 
 Figure 3.2 illustrates a sample call graph generated for a multi-contract project, highlighting inter-contract calls with dashed red lines.
 
@@ -160,11 +234,11 @@ The call graph serves multiple purposes:
 
 By combining these static analysis elements, the system creates a structured representation of the smart contract code that significantly enhances the effectiveness of the subsequent LLM-based vulnerability analysis.
 
-## 3.3 LLM Agent Framework
+## 3.5 LLM Agent Framework
 
 The heart of the system is a multi-agent LLM framework designed to analyze, validate, and exploit smart contract vulnerabilities. This architecture draws inspiration from multi-agent systems research but is specialized for smart contract security analysis. Each agent has a distinct role, together forming a comprehensive vulnerability detection and exploitation pipeline.
 
-### 3.3.1 Agent Coordinator
+### 3.5.1 Agent Coordinator
 
 The Agent Coordinator orchestrates the entire workflow, ensuring proper sequencing of agent activities and data flow. Implemented in `agent_coordinator.py`, it:
 
@@ -213,7 +287,7 @@ def analyze_contract(self, contract_info: Dict, auto_run_config: Dict = None) ->
     }
 ```
 
-### 3.3.2 Project Context Agent
+### 3.5.2 Project Context Agent
 
 The Project Context Agent (`project_context_llm.py`) analyzes relationships between contracts in multi-contract projects, identifying security issues that arise from inter-contract interactions. This agent:
 
@@ -263,7 +337,7 @@ The agent returns structured insights such as contract dependencies, critical fu
 }
 ```
 
-### 3.3.3 Vulnerability Analysis (Analyzer) Agent
+### 3.5.3 Vulnerability Analysis (Analyzer) Agent
 
 The Analyzer Agent (`analyzer.py`) performs comprehensive security analysis of smart contracts, leveraging both the static analysis results and knowledge retrieval. It is tasked with identifying a wide range of vulnerability types, including:
 
@@ -317,7 +391,7 @@ The agent returns a list of potential vulnerabilities. Here's an example output 
 }
 ```
 
-### 3.3.4 Validation (Skeptic) Agent
+### 3.5.4 Validation (Skeptic) Agent
 
 The Skeptic Agent (`skeptic.py`) critically evaluates the vulnerabilities reported by the Analyzer Agent, reducing false positives and providing more accurate confidence scores. This agent:
 
@@ -372,7 +446,7 @@ The Skeptic's output includes a confidence score and detailed reasoning for each
 
 Notice how the Skeptic increased the confidence of the reentrancy vulnerability from 0.85 to 0.92 but decreased the confidence of the unchecked return value issue from 0.70 to 0.45, based on its critical analysis.
 
-### 3.3.5 Exploit Generation (Exploiter) Agent
+### 3.5.5 Exploit Generation (Exploiter) Agent
 
 The Exploiter Agent (`exploiter.py`) designs attack plans for validated vulnerabilities. For each high-confidence vulnerability, it:
 
@@ -410,7 +484,7 @@ The agent structures its output as a formalized plan. Here's an actual exploit p
 
 This structured plan provides a blueprint for the Generator Agent to implement as executable code.
 
-### 3.3.6 Proof-of-Concept (Generator) Agent
+### 3.5.6 Proof-of-Concept (Generator) Agent
 
 The Generator Agent (`generator.py`) transforms the abstract exploit plans into concrete, executable Proof-of-Concept (PoC) code using the Foundry testing framework. This agent:
 
@@ -454,7 +528,7 @@ IMPORTANT FOUNDRY TEST REQUIREMENTS:
 
 The Generator produces complete, executable Solidity test contracts that will run in the Foundry environment.
 
-### 3.3.7 Execution (Runner) Agent
+### 3.5.7 Execution (Runner) Agent
 
 The ExploitRunner (`runner.py`) executes the generated PoC contracts in a controlled Foundry environment and handles any necessary fixes:
 
@@ -501,11 +575,11 @@ def run_and_fix_exploit(self, poc_data: Dict) -> Dict:
 
 This self-healing capability significantly improves the reliability of the exploit demonstrations.
 
-## 3.4 Retrieval-Augmented Knowledge Base
+## 3.6 Retrieval-Augmented Knowledge Base
 
 The system incorporates a Retrieval-Augmented Generation (RAG) component to enhance the accuracy and precision of vulnerability detection by providing relevant examples and patterns from known vulnerabilities.
 
-### 3.4.1 Knowledge Base Design
+### 3.6.1 Knowledge Base Design
 
 The knowledge base consists of:
 
@@ -537,7 +611,7 @@ The knowledge base is structured in a JSON format that links code snippets to th
 
 This structured format enables the system to retrieve relevant examples when analyzing contracts with similar patterns.
 
-### 3.4.2 Vector Embedding and Retrieval
+### 3.6.2 Vector Embedding and Retrieval
 
 The system uses vector embeddings to enable semantic search of the knowledge base. Implemented in `doc_db.py`, this approach:
 
@@ -587,7 +661,7 @@ def analyze(self, contract_info: Dict) -> Dict:
     return {"vulnerabilities": vulnerabilities}
 ```
 
-### 3.4.3 Integration with Analysis
+### 3.6.3 Integration with Analysis
 
 The retrieved vulnerability examples significantly enhance the LLM's performance by:
 
@@ -613,7 +687,7 @@ for i, doc in enumerate(relevant_docs, start=1):
 
 The inclusion of this RAG component represents a significant advancement over pure LLM-based approaches, combining the pattern-matching strengths of traditional vulnerability databases with the reasoning capabilities of LLMs.
 
-## 3.5 Workflow Example
+## 3.7 Workflow Example
 
 To effectively illustrate the system's operation, Figure 3.3 presents a detailed workflow diagram showing how a contract with a reentrancy vulnerability is processed through the system. This visual representation demonstrates the interaction between components, the flow of information, and the transformation of data at each stage of the analysis pipeline.
 
@@ -642,451 +716,11 @@ The diagram illustrates:
 
 This integrated workflow demonstrates how the system combines static analysis tools with multiple specialized LLM agents to provide a comprehensive security analysis that not only identifies vulnerabilities but also validates them through concrete exploitation and offers actionable remediation advice.
 
-## 3.6 Design Rationale
-
-The system's architecture reflects several key design decisions that optimize it for the complex task of smart contract vulnerability detection and exploitation:
-
-### 3.6.1 Multi-Agent Approach
-
-The multi-agent design was chosen for its ability to decompose the complex problem of vulnerability analysis into specialized subtasks. This approach:
-
-1. **Leverages Specialization**: Each agent focuses on a specific aspect of the problem, allowing for deeper expertise in narrower domains.
-2. **Implements Checks and Balances**: The Skeptic agent specifically counters the tendency of vulnerability scanners to produce false positives.
-3. **Enables Sequential Refinement**: Information flows from general to specific, with each agent adding value to the previous stage's output.
-
-This approach is supported by research in LLM-based agency (Weng, 2023) and cognitive division of labor in complex reasoning tasks (Karpas et al., 2022).
-
-### 3.6.2 Static Analysis Integration
-
-The decision to use Slither as a foundation for LLM analysis was driven by:
-
-1. **Complementary Strengths**: Static analyzers excel at pattern recognition and control flow analysis, while LLMs provide contextual understanding and reasoning.
-2. **Computational Efficiency**: Using Slither for initial analysis reduces the computational burden on LLMs.
-3. **Structured Guidance**: Slither's output provides structured guidance that helps the LLM focus on relevant code sections.
-
-### 3.6.3 Retrieval-Augmented Generation
-
-The integration of RAG was motivated by:
-
-1. **Factual Grounding**: RAG provides factual examples that reduce hallucination in LLM outputs.
-2. **Domain-Specific Knowledge**: The knowledge base contains specialized information about smart contract vulnerabilities that might not be fully represented in general-purpose LLM training.
-3. **Efficiency**: Retrieving relevant examples allows the LLM to focus on analyzing similar patterns rather than having to identify patterns from scratch.
-
-### 3.6.4 Executable Proof of Concepts
-
-The system generates executable PoCs rather than just theoretical exploit descriptions because:
-
-1. **Concrete Validation**: Executable PoCs provide concrete validation of vulnerability existence.
-2. **Educational Value**: Working demonstrations have superior educational value for developers.
-3. **False Positive Reduction**: The requirement for a working exploit significantly reduces false positives.
-
-### 3.6.5 Self-Healing Capabilities
-
-The Runner agent's ability to fix failing PoCs autonomously addresses a common limitation in automated exploit generation:
-
-1. **Practical Robustness**: LLM-generated code often contains minor errors that would otherwise require human intervention.
-2. **Learning from Failures**: The system improves its understanding by analyzing failed attempts.
-3. **Increased Success Rate**: Iterative improvement significantly increases the success rate of exploit demonstrations.
-
-These design choices collectively enable a system that provides more accurate, actionable, and educational security analysis than either traditional static analyzers or pure LLM-based approaches could achieve independently.
-
-# Chapter 4: Implementation
-
-## 4.1 Technology Stack
-
-The smart contract vulnerability detection and exploitation system is implemented using a comprehensive stack of modern technologies:
-
-### 4.1.1 Core Programming Languages and Frameworks
-
-- **Python 3.9+**: The primary language for implementing the agent system, static analysis integration, and API
-- **Solidity 0.8.x**: For writing and analyzing smart contracts, with compatibility for earlier versions
-- **JavaScript/React**: For the frontend proof-of-concept interface
-
-### 4.1.2 Smart Contract Analysis Tools
-
-- **Slither (1.1.0)**: Primary static analysis framework, providing function extraction, call graph generation, and vulnerability detection
-- **Foundry (0.2.0)**:
-  - Forge: Testing framework for compiling and executing exploit proofs-of-concept
-  - Anvil: Local Ethereum node for testing contract interactions
-- **Web3.py (6.0.0)**: Python library for interacting with Ethereum blockchain
-
-### 4.1.3 LLM Integration
-
-- **OpenAI API**: Primary interface for accessing GPT models
-  - Models used: GPT-4, GPT-4o, GPT-3.5-Turbo
-- **Anthropic API**: Alternative provider for Claude models
-  - Models used: Claude 3 Opus, Claude 3 Sonnet
-- **LangChain (0.1.0)**: Framework for building LLM applications, used for RAG components
-
-### 4.1.4 Vector Database and Embedding
-
-- **Pinecone**: Vector database for storing and retrieving vulnerability examples
-- **OpenAI Embeddings**: For creating vector representations of code snippets and vulnerability descriptions
-
-### 4.1.5 Web Interface
-
-- **Flask (2.3.3)**: Lightweight web framework for the API backend
-- **ReactJS (18.2.0)**: Frontend library for building the user interface
-- **TailwindCSS (3.3.5)**: Utility-first CSS framework for styling
-
-### 4.1.6 Development and Testing Environment
-
-- **Poetry (1.6.1)**: Dependency management and packaging
-- **Docker (24.0.5)**: Containerization for reproducible deployment
-- **Git (2.40.1)**: Version control
-
-The technology stack was selected to prioritize:
-1. **Modularity**: Components can be updated or replaced independently
-2. **Extensibility**: New agents or analysis techniques can be added without major refactoring
-3. **Robustness**: Industry-standard tools with active maintenance
-
-## 4.2 Key Implementation Details
-
-### 4.2.1 Model Configuration System
-
-The system implements a flexible model configuration system that allows different LLM models to be assigned to different agents based on their specific needs:
-
-```python
-class ModelConfig:
-    def __init__(
-        self,
-        analyzer_model="gpt-4o-mini",
-        skeptic_model="gpt-4o-mini",
-        exploiter_model="gpt-4o-mini",
-        generator_model="gpt-4o-mini",
-        context_model="gpt-4o-mini",
-        base_url=None,
-        skip_poc_generation=False,
-        export_markdown=False,
-    ):
-        self.analyzer_model = analyzer_model
-        self.skeptic_model = skeptic_model
-        self.exploiter_model = exploiter_model
-        self.generator_model = generator_model
-        self.context_model = context_model
-        self.base_url = base_url
-        self.skip_poc_generation = skip_poc_generation
-        self.export_markdown = export_markdown
-        
-    def get_model(self, agent_type):
-        model_map = {
-            "analyzer": self.analyzer_model,
-            "skeptic": self.skeptic_model,
-            "exploiter": self.exploiter_model,
-            "generator": self.generator_model,
-            "project_context": self.context_model,
-        }
-        return model_map.get(agent_type, self.analyzer_model)
-```
-
-This design allows for:
-- Using more powerful models for critical reasoning tasks (like vulnerability analysis)
-- Using smaller, faster models for more straightforward tasks
-- Easy experimentation with different model configurations
-- Support for different API providers (OpenAI, Anthropic) through provider detection
-
-### 4.2.2 Prompt Engineering
-
-The implementation uses carefully crafted prompts for each agent, designed to elicit specific types of reasoning and output formats. Key prompt engineering techniques include:
-
-1. **Structured Reasoning**: Prompts that guide the LLM through a step-by-step reasoning process
-2. **Role Definition**: Clearly defining the agent's role and expertise
-3. **Task Decomposition**: Breaking complex tasks into specific subtasks
-4. **Output Formatting**: Explicit instructions for JSON-structured outputs
-5. **Few-Shot Examples**: Including examples of expected outputs for complex tasks
-
-Example of structured reasoning in the Analyzer prompt:
-```python
-instructions = """\
-TASK:
-1. First conduct a THOROUGH, INDEPENDENT security review of the contract without relying on examples.
-   - Review state variables, initialization, access control
-   - Examine value flows (ETH and tokens) for manipulation points
-   - Identify privilege escalation possibilities
-   - Check mathematical operations for precision loss or overflow/underflow
-   - Analyze external calls and their security implications
-
-2. After independent analysis, systematically check for ALL vulnerability categories specified.
-
-3. Prioritize BUSINESS LOGIC FLAWS that might be unique to this contract:
-   - Economic incentive misalignments
-   - State manipulation across transactions
-   - Edge cases in mathematical formulas
-   - Governance or access control loopholes
-   - Transaction ordering dependencies
-"""
-```
-
-### 4.2.3 JSON Output Handling
-
-The system standardizes on JSON for structured data exchange between agents, with robust parsing and error handling:
-
-```python
-def _parse_llm_response(self, response_text: str) -> List[Dict]:
-    """
-    Attempt to parse the LLM's response as JSON.
-    Fallback to searching for code blocks if raw parse fails.
-    """
-    try:
-        data = json.loads(response_text)
-        return data.get("vulnerabilities", [])
-    except json.JSONDecodeError:
-        # fallback: search for triple backtick blocks
-        match = re.search(r"```(?:json)?(.*?)```", response_text, re.DOTALL)
-        if match:
-            block = match.group(1).strip()
-            try:
-                data = json.loads(block)
-                return data.get("vulnerabilities", [])
-            except:
-                pass
-        # ultimate fallback
-        return [
-            {
-                "vulnerability_type": "unknown",
-                "confidence_score": 0.0,
-                "reasoning": "No valid JSON found",
-                "affected_functions": [],
-                "impact": "",
-                "exploitation_scenario": "",
-            }
-        ]
-```
-
-This approach ensures robustness even when LLM outputs don't perfectly conform to the requested format.
-
-### 4.2.4 Multi-Contract Analysis Implementation
-
-For multi-contract projects, the system implements a ProjectContextLLMAgent that analyzes relationships between contracts:
-
-```python
-def analyze_project(self, contracts_dir: str, call_graph: Optional[Dict] = None) -> Dict:
-    """
-    Autonomously analyzes a multi-contract project to identify security-relevant
-    inter-contract relationships and key insights.
-    """
-    contract_files = self._get_contract_files(contracts_dir)
-    contract_metadata = self._extract_basic_metadata(contract_files)
-    context = self._analyze_with_llm(contract_metadata, call_graph, contracts_dir)
-    return context
-```
-
-The agent extracts basic metadata from all contract files, then uses an LLM to analyze the relationships between contracts, identifying:
-- Inheritance relationships
-- Interface implementations
-- Inter-contract function calls
-- Potential security issues in contract interactions
-
-### 4.2.5 Exploit Generation and Execution
-
-The system uses Foundry's testing framework for exploit generation and execution:
-
-1. **Generator Creates Test Files**: The Generator agent creates Solidity test files using Foundry's testing framework
-2. **Standard Test Environment**: A BaseTestWithBalanceLog contract provides consistent utilities for all tests
-3. **Command Building**: The system constructs appropriate Forge commands for test execution
-4. **Output Parsing**: Test output is parsed to determine success or failure
-
-```python
-def _execute_exploit(self, poc_data: Dict) -> Dict:
-    """Execute the exploit using Foundry's Forge"""
-    exploit_file = poc_data.get("exploit_file")
-    execution_command = poc_data.get("execution_command")
-    
-    if not exploit_file or not execution_command:
-        return {"success": False, "error": "Missing exploit file or execution command"}
-    
-    try:
-        # Run the forge test command
-        result = subprocess.run(
-            execution_command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=60  # Timeout after 60 seconds
-        )
-        
-        output = result.stdout + result.stderr
-        
-        # Check if the test was successful
-        if "[PASS]" in output:
-            return {"success": True, "output": output}
-        else:
-            return {"success": False, "error": output, "output": output}
-    except Exception as e:
-        return {"success": False, "error": str(e), "output": ""}
-```
-
-### 4.2.6 Automated PoC Fixing
-
-One of the system's most innovative features is its ability to autonomously fix failing PoCs. This is implemented through:
-
-1. **Error Analysis**: The Runner agent extracts error information from failed test outputs
-2. **Contextualized Fixing**: An LLM prompt that includes both the original code and the error message
-3. **Iterative Improvement**: Multiple fix attempts with different approaches
-
-```python
-def _generate_fix(self, original_code: str, error_message: str) -> str:
-    """Generate a fixed version of the exploit code based on the error"""
-    prompt = f"""
-    You are debugging a Solidity Foundry test file that has an error.
-    
-    Original Code:
-    ```solidity
-    {original_code}
-    ```
-    
-    Error Message:
-    ```
-    {error_message}
-    ```
-    
-    Analyze the error and fix the code. Common issues include:
-    1. Incorrect contract interfaces or function signatures
-    2. Missing initializations or setup steps
-    3. Incorrect ETH amounts or token precision
-    4. Gas issues or transaction ordering problems
-    
-    Return ONLY the complete fixed code without explanations or markdown formatting.
-    """
-    
-    # Create messages list
-    messages = [
-        {"role": "system", "content": "You are an expert Solidity developer debugging Foundry tests."},
-        {"role": "user", "content": prompt}
-    ]
-    
-    # Get the fixed code from the LLM
-    response = self.client.chat.completions.create(
-        model=self.model_name,
-        messages=messages
-    )
-    
-    fixed_code = response.choices[0].message.content.strip()
-    
-    # Clean up any markdown formatting
-    if fixed_code.startswith("```solidity"):
-        fixed_code = fixed_code.replace("```solidity", "", 1)
-        if fixed_code.endswith("```"):
-            fixed_code = fixed_code[:-3]
-    elif fixed_code.startswith("```"):
-        fixed_code = fixed_code.replace("```", "", 1)
-        if fixed_code.endswith("```"):
-            fixed_code = fixed_code[:-3]
-            
-    return fixed_code.strip()
-```
-
-This automated fixing capability significantly increases the success rate of exploit demonstrations.
-
-## 4.3 Enhancements and Iterations
-
-The system underwent several major iterations, each adding significant capabilities:
-
-### 4.3.1 Single to Multi-Contract Support
-
-The first major enhancement was extending from single-contract to multi-contract analysis:
-
-1. **Initial Version**: Analyzed individual Solidity files in isolation
-2. **Enhanced Version**: Added project context analysis for multi-contract projects
-
-This required:
-- Implementing the ProjectContextLLMAgent
-- Extending static analysis to capture inter-contract relationships
-- Enhancing prompts to include cross-contract context
-
-```python
-# Addition of project context to the analyzer prompt
-if "project_context" in contract_info:
-    # Use the project_context that was already analyzed and provided
-    context = contract_info["project_context"]
-    
-    # Get ProjectContextLLMAgent to generate the prompt section
-    project_context_agent = ProjectContextLLMAgent(self.model_config)
-    inter_contract_section = project_context_agent.generate_prompt_section(context)
-```
-
-### 4.3.2 Adding the Skeptic Agent
-
-An early iteration showed that the Analyzer agent produced too many false positives. This led to:
-
-1. **Problem**: High false positive rate in initial vulnerability detection
-2. **Solution**: Addition of a dedicated Skeptic agent to critically evaluate claims
-3. **Result**: Significantly improved precision in vulnerability reports
-
-The Skeptic agent was designed to apply more rigorous standards to vulnerability assessment:
-
-```python
-system_prompt = """You are a highly critical, business-focused Smart Contract Security Auditor with real-world exploit experience.
-Your role is to carefully evaluate initial vulnerability findings and provide a balanced assessment of their severity and exploitability.
-
-For each alleged vulnerability, determine:
-  1) Is it a genuine vulnerability that warrants attention?
-  2) Give a REASONABLE confidence score using these guidelines:
-     - 0.0-0.2: Definitely not a vulnerability / false positive
-     - 0.3-0.5: Unlikely to be exploitable but worth noting
-     - 0.6-0.8: Likely a genuine concern requiring attention
-     - 0.9-1.0: Critical vulnerability with high certainty
-  3) Provide clear reasoning that supports your confidence score
-"""
-```
-
-### 4.3.3 Implementation of RAG
-
-The addition of Retrieval-Augmented Generation was a significant enhancement:
-
-1. **Initial Version**: Relied solely on LLM's parametric knowledge
-2. **Enhanced Version**: Added retrieval of relevant examples from a knowledge base
-
-This required:
-- Implementing vector embeddings of vulnerability examples
-- Setting up a Pinecone vector database
-- Integrating retrieved examples into LLM prompts
-
-```python
-# Check if retriever is enabled
-if self.retriever:
-    relevant_docs = self.retriever.invoke(contract_info["source_code"])
-    progress.update(task, description=f"Found {len(relevant_docs)} relevant patterns")
-else:
-    relevant_docs = []
-    progress.update(task, description="RAG disabled, using direct analysis")
-```
-
-### 4.3.4 Self-Healing PoC Generation
-
-The system's ability to fix failing PoCs was added after observing that many initial exploits failed:
-
-1. **Initial Version**: Generated PoCs but had no recovery mechanism for failures
-2. **Enhanced Version**: Added capability to analyze errors and fix failing PoCs
-
-This significantly improved the success rate of exploit demonstrations.
-
-### 4.3.5 Model Flexibility
-
-The system was enhanced to support different LLM providers and models:
-
-1. **Initial Version**: Hardcoded to use specific OpenAI models
-2. **Enhanced Version**: Flexible model configuration supporting multiple providers
-
-```python
-def get_provider_info(self, model_name):
-    """Get provider information based on model name"""
-    if model_name.startswith(("gpt-", "davinci")):
-        return "openai", "OPENAI_API_KEY", "OPENAI_API_BASE"
-    elif model_name.startswith("claude"):
-        return "anthropic", "ANTHROPIC_API_KEY", "ANTHROPIC_API_BASE"
-    elif model_name.startswith(("llama", "mistral", "codellama")):
-        return "ollama", "OLLAMA_API_KEY", "OLLAMA_API_BASE"
-    else:
-        # Default to OpenAI
-        return "openai", "OPENAI_API_KEY", "OPENAI_API_BASE"
-```
-
-## 4.4 User Interface
+## 3.8 Web Interface Implementation
 
 A proof-of-concept web interface was implemented to demonstrate the system's capabilities and make it accessible to users without technical knowledge of the underlying implementation.
 
-### 4.4.1 Frontend Implementation
+### 3.8.1 Frontend Implementation
 
 The frontend was built using React and TailwindCSS, providing a clean interface for uploading contracts and viewing analysis results:
 
@@ -1131,7 +765,7 @@ function App() {
 }
 ```
 
-### 4.4.2 Backend API
+### 3.8.2 Backend API
 
 The backend API was implemented using Flask, providing endpoints for:
 - Uploading contracts
@@ -1175,7 +809,7 @@ def analyze_contract():
         }), 500
 ```
 
-### 4.4.3 Interactive Features
+### 3.8.3 Interactive Features
 
 The interface includes several interactive features:
 
@@ -1185,30 +819,127 @@ The interface includes several interactive features:
 4. **Exploit Viewer**: Code viewer for generated PoCs with execution results
 5. **Agent Status Visualizer**: Real-time display of agent activities during analysis
 
-Figure 4.1 shows the main interface of the web application.
+Figure 3.4 shows the main interface of the web application.
 
-![Figure 4.1: Web Interface](web_interface.png)
-*Figure 4.1: Web Interface showing contract input, analysis options, and results panels*
+![Figure 3.4: Web Interface](web_interface.png)
+*Figure 3.4: Web Interface showing contract input, analysis options, and results panels*
 
-## 4.5 Summary of Implementation
+## 3.9 Implementation Refinements and Iterations
 
-The implementation successfully translates the system design into a functional tool for smart contract vulnerability detection and exploitation. Table 4.1 summarizes how the implementation fulfills the key design requirements:
+The system underwent several major iterations, each adding significant capabilities:
 
-| Requirement | Implementation | Notes |
-|-------------|----------------|-------|
-| Static Analysis | Slither integration with custom function extraction and call graph generation | Extracts structural information and preliminary vulnerability indicators |
-| Multi-Contract Analysis | ProjectContextLLMAgent with inter-contract relationship analysis | Identifies security issues arising from contract interactions |
-| Vulnerability Detection | Analyzer agent with structured prompting and RAG integration | Comprehensive security review using both static analysis and LLM reasoning |
-| False Positive Reduction | Skeptic agent with critical evaluation criteria | Significantly improves precision through focused verification |
-| Exploit Generation | Exploiter and Generator agents with Foundry integration | Creates executable Proof-of-Concept attacks |
-| Self-Healing Capability | Runner agent with error analysis and automated fixing | Improves success rate through iterative refinement |
-| User Accessibility | Web interface with React frontend and Flask backend | Makes the system accessible to non-technical users |
+### 3.9.1 Single to Multi-Contract Support
 
-The implementation is characterized by:
+The first major enhancement was extending from single-contract to multi-contract analysis:
 
-1. **Modularity**: Each component can be developed, tested, and improved independently
-2. **Extensibility**: New vulnerability types, detection methods, or LLM models can be added easily
-3. **Robustness**: Error handling at all levels prevents cascading failures
-4. **Usability**: Both command-line and web interfaces support different user preferences
+1. **Initial Version**: Analyzed individual Solidity files in isolation
+2. **Enhanced Version**: Added project context analysis for multi-contract projects
 
-This implementation demonstrates that the multi-agent LLM approach, combined with traditional static analysis, can create a powerful, practical tool for smart contract security assessment that is more comprehensive than either approach alone.
+This required:
+- Implementing the ProjectContextLLMAgent
+- Extending static analysis to capture inter-contract relationships
+- Enhancing prompts to include cross-contract context
+
+```python
+# Addition of project context to the analyzer prompt
+if "project_context" in contract_info:
+    # Use the project_context that was already analyzed and provided
+    context = contract_info["project_context"]
+    
+    # Get ProjectContextLLMAgent to generate the prompt section
+    project_context_agent = ProjectContextLLMAgent(self.model_config)
+    inter_contract_section = project_context_agent.generate_prompt_section(context)
+```
+
+### 3.9.2 Adding the Skeptic Agent
+
+An early iteration showed that the Analyzer agent produced too many false positives. This led to:
+
+1. **Problem**: High false positive rate in initial vulnerability detection
+2. **Solution**: Addition of a dedicated Skeptic agent to critically evaluate claims
+3. **Result**: Significantly improved precision in vulnerability reports
+
+The Skeptic agent was designed to apply more rigorous standards to vulnerability assessment:
+
+```python
+system_prompt = """You are a highly critical, business-focused Smart Contract Security Auditor with real-world exploit experience.
+Your role is to carefully evaluate initial vulnerability findings and provide a balanced assessment of their severity and exploitability.
+
+For each alleged vulnerability, determine:
+  1) Is it a genuine vulnerability that warrants attention?
+  2) Give a REASONABLE confidence score using these guidelines:
+     - 0.0-0.2: Definitely not a vulnerability / false positive
+     - 0.3-0.5: Unlikely to be exploitable but worth noting
+     - 0.6-0.8: Likely a genuine concern requiring attention
+     - 0.9-1.0: Critical vulnerability with high certainty
+  3) Provide clear reasoning that supports your confidence score
+"""
+```
+
+### 3.9.3 Implementation of RAG
+
+The addition of Retrieval-Augmented Generation was a significant enhancement:
+
+1. **Initial Version**: Relied solely on LLM's parametric knowledge
+2. **Enhanced Version**: Added retrieval of relevant examples from a knowledge base
+
+This required:
+- Implementing vector embeddings of vulnerability examples
+- Setting up a Pinecone vector database
+- Integrating retrieved examples into LLM prompts
+
+```python
+# Check if retriever is enabled
+if self.retriever:
+    relevant_docs = self.retriever.invoke(contract_info["source_code"])
+    progress.update(task, description=f"Found {len(relevant_docs)} relevant patterns")
+else:
+    relevant_docs = []
+    progress.update(task, description="RAG disabled, using direct analysis")
+```
+
+### 3.9.4 Self-Healing PoC Generation
+
+The system's ability to fix failing PoCs was added after observing that many initial exploits failed:
+
+1. **Initial Version**: Generated PoCs but had no recovery mechanism for failures
+2. **Enhanced Version**: Added capability to analyze errors and fix failing PoCs
+
+This significantly improved the success rate of exploit demonstrations.
+
+### 3.9.5 Model Flexibility
+
+The system was enhanced to support different LLM providers and models:
+
+1. **Initial Version**: Hardcoded to use specific OpenAI models
+2. **Enhanced Version**: Flexible model configuration supporting multiple providers
+
+```python
+def get_provider_info(self, model_name):
+    """Get provider information based on model name"""
+    if model_name.startswith(("gpt-", "davinci")):
+        return "openai", "OPENAI_API_KEY", "OPENAI_API_BASE"
+    elif model_name.startswith("claude"):
+        return "anthropic", "ANTHROPIC_API_KEY", "ANTHROPIC_API_BASE"
+    elif model_name.startswith(("llama", "mistral", "codellama")):
+        return "ollama", "OLLAMA_API_KEY", "OLLAMA_API_BASE"
+    else:
+        # Default to OpenAI
+        return "openai", "OPENAI_API_KEY", "OPENAI_API_BASE"
+```
+
+## 3.10 Summary
+
+The implemented system successfully brings together static analysis, multi-agent LLM architecture, and Retrieval-Augmented Generation to create a comprehensive smart contract vulnerability detection and exploitation tool. Key accomplishments include:
+
+1. **Integration of Complementary Approaches**: The system combines the pattern-matching strengths of static analysis tools with the reasoning capabilities of LLMs, enhanced by retrieval-based knowledge.
+
+2. **Multi-Agent System**: The specialized agent architecture decomposes the complex security analysis problem into manageable components, with each agent focusing on a specific aspect of the analysis.
+
+3. **Practical Exploitation**: Unlike theoretical vulnerability identification, the system generates and executes concrete proof-of-concept exploits, providing definitive validation of security issues.
+
+4. **Self-Healing Capabilities**: The autonomous fixing of failing exploits demonstrates an advanced level of adaptability not typically found in security analysis tools.
+
+5. **User Accessibility**: The web interface makes advanced security analysis accessible to users without deep technical knowledge of the underlying implementation.
+
+The system represents a significant advancement in smart contract security tools, providing more comprehensive, actionable, and educational security analysis than either traditional static analyzers or pure LLM-based approaches could achieve independently.
