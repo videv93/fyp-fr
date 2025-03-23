@@ -51,7 +51,7 @@ class AnalyzerAgent:
                 
                 # Check if retriever is enabled
                 if self.retriever:
-                    relevant_docs = self.retriever.invoke(contract_info["source_code"])
+                    relevant_docs = self.retriever.invoke(query_text)
                     progress.update(task, description=f"Found {len(relevant_docs)} relevant patterns")
                 else:
                     relevant_docs = []
@@ -259,6 +259,9 @@ Format findings as:
         """
         Use openai.ChatCompletion with the appropriate messaging structure based on model type.
         """
+        # Import token tracker
+        from utils.token_tracker import token_tracker
+        
         # Create messages list based on model capabilities
         if not self.model_config.supports_reasoning(self.model_name):
             messages = [
@@ -282,6 +285,17 @@ Format findings as:
                 model=self.model_name,
                 messages=messages
             )
+            
+        # Track token usage
+        if hasattr(resp, 'usage') and resp.usage:
+            token_tracker.log_tokens(
+                agent_name="analyzer",
+                model_name=self.model_name,
+                prompt_tokens=resp.usage.prompt_tokens,
+                completion_tokens=resp.usage.completion_tokens,
+                total_tokens=resp.usage.total_tokens
+            )
+            
         return resp.choices[0].message.content.strip()
 
     def _parse_llm_response(self, response_text: str) -> List[Dict]:

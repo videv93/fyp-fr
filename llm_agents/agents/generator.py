@@ -133,6 +133,9 @@ Return only the complete Solidity code with no additional explanations.
                 {"role": "user", "content": prompt}
             ]
 
+        # Import token tracker
+        from utils.token_tracker import token_tracker
+        
         if self.model_name == "claude-3-7-sonnet-latest":
             resp = self.client.chat.completions.create(
                 model=self.model_name,
@@ -144,6 +147,16 @@ Return only the complete Solidity code with no additional explanations.
             resp = self.client.chat.completions.create(
                 model=self.model_name,
                 messages=messages
+            )
+            
+        # Track token usage
+        if hasattr(resp, 'usage') and resp.usage:
+            token_tracker.log_tokens(
+                agent_name="generator",
+                model_name=self.model_name,
+                prompt_tokens=resp.usage.prompt_tokens,
+                completion_tokens=resp.usage.completion_tokens,
+                total_tokens=resp.usage.total_tokens
             )
 
         # Extract the code from the response

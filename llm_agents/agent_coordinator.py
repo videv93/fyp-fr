@@ -184,7 +184,23 @@ class AgentCoordinator:
                 console.print(f"[bold green]✓ Generated demonstration for {vul.get('vulnerability_type')}[/bold green]")
 
         console.print("\n[bold green]✓ Agent workflow completed[/bold green]")
+        
+        # Display token usage statistics if available
+        try:
+            from utils.token_tracker import token_tracker
+            console.print("\n[bold blue]📊 Token Usage Statistics:[/bold blue]")
+            token_tracker.print_summary()
+            
+            # Save token usage to file
+            token_file = token_tracker.save_to_file("token_usage_stats.json")
+            console.print(f"[dim]Token usage stats saved to: {token_file}[/dim]")
+        except ImportError as e:
+            console.print("[dim]Token tracking module not available[/dim]")
+        except Exception as e:
+            console.print(f"[dim]Error displaying token usage: {str(e)}[/dim]")
+        
         return {
             "rechecked_vulnerabilities": rechecked_vulns,
             "generated_pocs": generated_pocs,
+            "token_usage": token_tracker.get_usage_summary() if 'token_tracker' in locals() else None
         }

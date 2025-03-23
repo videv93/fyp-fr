@@ -26,7 +26,7 @@ class ProjectContextLLMAgent:
         from ..config import ModelConfig
         
         self.model_config = model_config or ModelConfig()
-        self.model_name = self.model_config.get_model("project_context") if hasattr(self.model_config, "get_model") else "gpt-4"
+        self.model_name = self.model_config.get_model("project_context") if hasattr(self.model_config, "get_model") else "gpt-4o"
         
         # Get provider info for the selected model
         if hasattr(self.model_config, "get_provider_info"):
@@ -141,8 +141,7 @@ class ProjectContextLLMAgent:
             user_prompt += "---\n"
         if call_graph:
             user_prompt += "\n## Call Graph (from Slither analysis)\n"
-            user_prompt += json.dumps(call_graph, indent=2)[:2000]
-            user_prompt += "\n(call graph truncated for brevity)\n"
+            user_prompt += json.dumps(call_graph, indent=2)
         
         response = self._call_llm(system_prompt, user_prompt)
         
@@ -174,6 +173,7 @@ class ProjectContextLLMAgent:
                 'important_functions': important_functions,
                 'contract_files': [m.get('file_path', 'unknown') for m in contract_metadata],
                 'contract_details': contract_info,
+                'call_graph': call_graph,
                 'mermaid_diagram': mermaid_diagram,
                 'stats': {
                     'total_contracts': len(contract_metadata),
@@ -198,6 +198,9 @@ class ProjectContextLLMAgent:
             }
     
     def _call_llm(self, system_prompt: str, user_prompt: str) -> str:
+        # Import token tracker
+        from utils.token_tracker import token_tracker
+        
         if not self.model_config.supports_reasoning(self.model_name):
             messages = [
                 {"role": "system", "content": system_prompt},
@@ -219,6 +222,17 @@ class ProjectContextLLMAgent:
                 model=self.model_name,
                 messages=messages
             )
+        
+        # Track token usage
+        if hasattr(resp, 'usage') and resp.usage:
+            token_tracker.log_tokens(
+                agent_name="project_context",
+                model_name=self.model_name,
+                prompt_tokens=resp.usage.prompt_tokens,
+                completion_tokens=resp.usage.completion_tokens,
+                total_tokens=resp.usage.total_tokens
+            )
+        
         return resp.choices[0].message.content.strip()
     
     def _extract_insights_from_response(self, response: str) -> Dict:
@@ -366,7 +380,7 @@ class ProjectContextLLMAgent:
     def generate_prompt_section(self, analysis_result: Dict) -> str:
         if not analysis_result:
             return "=== INTER-CONTRACT RELATIONSHIPS AND SECURITY ANALYSIS ===\nNo inter-contract relationships found."
-        print(analysis_result)
+        
         stats = analysis_result.get('stats', {})
         insights = analysis_result.get('insights', [])
         dependencies = analysis_result.get('dependencies', [])
@@ -374,6 +388,7 @@ class ProjectContextLLMAgent:
         recommendations = analysis_result.get('recommendations', [])
         important_functions = analysis_result.get('important_functions', [])
         contract_files = analysis_result.get('contract_files', [])
+        call_graph = analysis_result.get('call_graph', [])
         section = "=== INTER-CONTRACT RELATIONSHIPS AND SECURITY ANALYSIS ===\n"
         section += f"Analyzed {stats.get('total_contracts', 0)} contracts.\n"
         if contract_files:
@@ -405,6 +420,11 @@ class ProjectContextLLMAgent:
             section += "Security Recommendations:\n"
             for rec in recommendations:
                 section += f"- {rec}\n"
+            section += "\n"
+        if call_graph:
+            section += "Call Graph:\n"
+            for call in call_graph:
+                section += f"- {call}\n"
             section += "\n"
         if not any([insights, dependencies, vulnerabilities, recommendations, important_functions]):
             section += "Raw LLM Analysis:\n"
