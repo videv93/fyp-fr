@@ -9,6 +9,7 @@ from static_analysis.parse_contract import analyze_contract
 from llm_agents.agent_coordinator import AgentCoordinator
 from llm_agents.config import ModelConfig
 from utils.print_utils import *
+from utils.token_tracker import performance_tracker
 
 def parse_arguments():
     """Parse command line arguments for model configuration"""
@@ -56,9 +57,27 @@ def parse_arguments():
 
 def main():
     print_header("Smart Contract Vulnerability Analyzer")
+    
+    # Start performance tracking
+    performance_tracker.reset()
+    performance_tracker.start_stage("initialization")
 
     # Parse command line arguments
     args = parse_arguments()
+
+    # Set run configuration for tracking
+    run_config = {
+        "analyzer_model": args.analyzer_model,
+        "skeptic_model": args.skeptic_model,
+        "exploiter_model": args.exploiter_model,
+        "generator_model": args.generator_model,
+        "context_model": args.context_model,
+        "all_models": args.all_models,
+        "use_rag": not args.no_rag,
+        "skip_poc": args.skip_poc,
+        "auto_run": not args.no_auto_run
+    }
+    performance_tracker.set_run_config(run_config)
 
     # Check environment
     try:
@@ -112,7 +131,9 @@ def main():
     filepath = args.contract
     print_step(f"Analyzing contract: {filepath}")
 
-    # Static Analysis
+    # Start static analysis stage
+    performance_tracker.start_stage("static_analysis")
+    
     with create_progress_spinner("Running static analysis") as progress:
         task = progress.add_task("Analyzing contract structure...")
         function_details, call_graph, detector_results = analyze_contract(filepath)
@@ -126,9 +147,19 @@ def main():
 
     # Read contract source or fetch from blockchain
     contract_files_map = {}
+    contracts_dir = None
+    
     if args.contract_address:
         from utils.source_code_fetcher import fetch_and_flatten_contract
-        output_file = f"static_analysis/test_contracts/{args.contract_address}.sol"
+        
+        # Create uploads directory if it doesn't exist (similar to frontend)
+        uploads_dir = os.path.join(os.getcwd(), "uploads")
+        os.makedirs(uploads_dir, exist_ok=True)
+        
+        # Use uploads directory for consistency with frontend
+        output_file = os.path.join(uploads_dir, f"{args.contract_address}.sol")
+        
+        print_step(f"Fetching contract {args.contract_address} from {args.network}...")
         
         # Fetch contract with both flattened and separate outputs
         contract_files_map = fetch_and_flatten_contract(
@@ -139,12 +170,32 @@ def main():
             save_separate=args.save_separate
         )
         
+        print_success(f"Contract fetched and saved to {output_file}")
+        
+        # Get the contracts directory path if separate files were saved
+        if args.save_separate and contract_files_map:
+            contracts_dir = f"{os.path.splitext(output_file)[0]}_contracts"
+            if os.path.isdir(contracts_dir):
+                print_step(f"Found contracts directory: {contracts_dir}")
+                print_step(f"Number of contract files: {len(os.listdir(contracts_dir))}")
+        
         # Update filepath to the fetched contract
         filepath = output_file
     
     # Read contract source
     with open(filepath, "r", encoding="utf-8") as f:
         source_code = f.read()
+
+    # Track code metrics
+    contract_files = [filepath]
+    if contracts_dir and os.path.isdir(contracts_dir):
+        # Add all solidity files in the contracts directory
+        for root, _, files in os.walk(contracts_dir):
+            for file in files:
+                if file.endswith('.sol'):
+                    contract_files.append(os.path.join(root, file))
+    
+    performance_tracker.log_code_analysis(contract_files)
 
     # Prepare for LLM analysis
     contract_info = {
@@ -154,21 +205,20 @@ def main():
         "detector_results": detector_results,
     }
     
-    # Add contracts directory path if separate files were saved
-    if args.save_separate and contract_files_map:
-        contracts_dir = f"{os.path.splitext(filepath)[0]}_contracts"
-        if os.path.isdir(contracts_dir):
-            contract_info["contracts_dir"] = contracts_dir
-            print_step(f"Added contracts directory for inter-contract analysis: {contracts_dir}")
-            
-            # Get contract count information - recursively search for all .sol files
-            sol_files = []
-            for root, _, files in os.walk(contracts_dir):
-                sol_files.extend([os.path.join(root, f) for f in files if f.endswith('.sol')])
-            contract_count = len(sol_files)
-            print_step(f"LLM-powered ProjectContextAgent will analyze {contract_count} contracts for inter-contract relationships")
+    # Add contracts directory path if it's available and valid
+    if contracts_dir and os.path.isdir(contracts_dir):
+        contract_info["contracts_dir"] = contracts_dir
+        print_step(f"Added contracts directory for inter-contract analysis: {contracts_dir}")
+        
+        # Get contract count information - recursively search for all .sol files
+        sol_files = []
+        for root, _, files in os.walk(contracts_dir):
+            sol_files.extend([os.path.join(root, f) for f in files if f.endswith('.sol')])
+        contract_count = len(sol_files)
+        print_step(f"LLM-powered ProjectContextAgent will analyze {contract_count} contracts for inter-contract relationships")
 
     # Run LLM analysis
+    performance_tracker.start_stage("llm_analysis")
     print_header("Running LLM Analysis")
     coordinator = AgentCoordinator(model_config=model_config, use_rag=not args.no_rag)
 
@@ -190,9 +240,14 @@ def main():
     else:
         print_step("RAG disabled, analysis will use only current contract code")
 
+    # Begin project context stage
+    performance_tracker.start_stage("project_context")
+    
+    # Analyze the contract with all the configured agents
     results = coordinator.analyze_contract(contract_info, auto_run_config=auto_run_config)
 
     # Print results
+    performance_tracker.start_stage("results_reporting")
     print_header("Analysis Results")
     rechecked = results.get("rechecked_vulnerabilities", [])
 
@@ -278,12 +333,23 @@ def main():
                     console.print("[dim]The test was generated but not automatically executed[/dim]")
     
     # Export results to markdown if configured
+    performance_tracker.start_stage("export")
     if model_config.export_markdown:
         export_results_to_markdown(filepath, results)
         
     # Export results to JSON if requested
     if args.export_json:
         export_results_to_json(filepath, results, args.export_json)
+        
+    # Save and print performance metrics
+    performance_tracker.end_stage()  # End the export stage
+    
+    # Token tracking should be working now without any debug needed
+    
+    metrics_file = performance_tracker.save_to_file()
+    
+    # Print performance summary
+    performance_tracker.print_summary(include_detailed_breakdowns=True)
 
 def export_results_to_markdown(contract_path, results):
     """Export analysis results to a markdown file"""

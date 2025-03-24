@@ -23,8 +23,8 @@ node_modules
 static_analysis/test_contracts/sample.sol
 
 # benchmark files
-benchmark_data
-benchmark_data_no_errors
+# benchmark_data
+# benchmark_data_no_errors
 
 # Exploit PoCs
 exploit/src/test

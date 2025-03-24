@@ -17,6 +17,7 @@ from .agents.project_context_llm import ProjectContextLLMAgent
 from .config import ModelConfig
 
 from utils.print_utils import print_step, print_success, print_warning
+from utils.token_tracker import performance_tracker
 
 class AgentCoordinator:
     def __init__(self, model_config=None, use_rag=True):
@@ -61,6 +62,7 @@ class AgentCoordinator:
 
         # 1. ProjectContextLLMAgent => inter-contract relationships
         if "contracts_dir" in contract_info and contract_info["contracts_dir"]:
+            performance_tracker.start_stage("project_context_agent")
             console.print("[bold blue]🔍 ProjectContextLLMAgent: Analyzing contract relationships...[/bold blue]")
             project_context_results = self.project_context.analyze_project(
                 contract_info["contracts_dir"],
@@ -93,6 +95,7 @@ class AgentCoordinator:
             contract_info["project_context"] = project_context_results
 
         # 2. Analyzer => all vulnerabilities
+        performance_tracker.start_stage("analyzer_agent")
         console.print("\n[bold blue]🔍 AnalyzerAgent: Starting vulnerability detection...[/bold blue]")
         vuln_results = self.analyzer.analyze(contract_info)
         vulnerabilities = vuln_results.get("vulnerabilities", [])
@@ -105,6 +108,7 @@ class AgentCoordinator:
             console.print(f"  - {v.get('vulnerability_type')} (confidence: {v.get('confidence_score', 0):.2f})")
 
         # 2. Skeptic => re-check validity
+        performance_tracker.start_stage("skeptic_agent")
         console.print("\n[bold blue]🧐 SkepticAgent: Re-checking vulnerability validity...[/bold blue]")
         rechecked_vulns = self.skeptic.audit_vulnerabilities(
             contract_info["source_code"], vulnerabilities
@@ -123,6 +127,7 @@ class AgentCoordinator:
 
         # Process high confidence vulnerabilities
         if high_conf_vulns:
+            performance_tracker.start_stage("exploiter_agent")
             console.print(f"\n[bold blue]💡 ExploiterAgent: Generating exploit plans for {len(high_conf_vulns)} vulnerabilities...[/bold blue]")
 
             for i, vul in enumerate(high_conf_vulns):
@@ -143,6 +148,7 @@ class AgentCoordinator:
                     continue
                 
                 # Otherwise continue with PoC generation
+                performance_tracker.start_stage("generator_agent")
                 console.print(f"\n[bold blue]🔧 GeneratorAgent: Creating PoC for {vul.get('vulnerability_type')}...[/bold blue]")
 
                 # First generate the BaseTestWithBalanceLog.sol file if it doesn't exist
@@ -155,6 +161,7 @@ class AgentCoordinator:
 
                 # Run and fix the exploit if auto-run is enabled
                 if auto_run_config.get("auto_run", True):
+                    performance_tracker.start_stage("exploit_runner")
                     console.print(f"\n[bold blue]🔍 ExploitRunner: Testing and fixing PoC...[/bold blue]")
                     run_result = self.runner.run_and_fix_exploit(poc_data)
 
@@ -183,21 +190,11 @@ class AgentCoordinator:
                 generated_pocs.append(poc_info)
                 console.print(f"[bold green]✓ Generated demonstration for {vul.get('vulnerability_type')}[/bold green]")
 
+        # End the last stage
+        performance_tracker.end_stage()
         console.print("\n[bold green]✓ Agent workflow completed[/bold green]")
         
-        # Display token usage statistics if available
-        try:
-            from utils.token_tracker import token_tracker
-            console.print("\n[bold blue]📊 Token Usage Statistics:[/bold blue]")
-            token_tracker.print_summary()
-            
-            # Save token usage to file
-            token_file = token_tracker.save_to_file("token_usage_stats.json")
-            console.print(f"[dim]Token usage stats saved to: {token_file}[/dim]")
-        except ImportError as e:
-            console.print("[dim]Token tracking module not available[/dim]")
-        except Exception as e:
-            console.print(f"[dim]Error displaying token usage: {str(e)}[/dim]")
+        # Avoid printing token stats here - we'll do it in main.py as part of the comprehensive performance summary
         
         return {
             "rechecked_vulnerabilities": rechecked_vulns,

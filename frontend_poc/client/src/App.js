@@ -7,6 +7,7 @@ import AgentVisualizer from "./components/AgentVisualizer";
 import VulnerabilitiesPanel from "./components/VulnerabilitiesPanel";
 import ExploitsPanel from "./components/ExploitsPanel";
 import ProjectContextPanel from "./components/ProjectContextPanel";
+import PerformanceMetricsPanel from "./components/PerformanceMetricsPanel";
 import { io } from "socket.io-client";
 import {
   fetchContractStatus,
@@ -27,6 +28,7 @@ function App() {
   const [agentDetails, setAgentDetails] = useState({});
   const [ragDetails, setRagDetails] = useState([]);
   const [projectContextData, setProjectContextData] = useState({});
+  const [performanceMetrics, setPerformanceMetrics] = useState(null);
   const [analysisOptions, setAnalysisOptions] = useState({
     analyzer_model: "o3-mini",
     skeptic_model: "o3-mini",
@@ -109,6 +111,13 @@ function App() {
         try {
           const results = await fetchContractResults(data.job_id);
           setAnalysisResults(results.data.results);
+          
+          // Set performance metrics if available
+          if (data.performance_metrics) {
+            setPerformanceMetrics(data.performance_metrics);
+          } else if (results.data.performance_metrics) {
+            setPerformanceMetrics(results.data.performance_metrics);
+          }
         } catch (error) {
           console.error("Error fetching results:", error);
         }
@@ -233,6 +242,7 @@ function App() {
     setAgentDetails({}); // Reset agent details
     setRagDetails([]); // Reset RAG details
     setProjectContextData({}); // Reset project context data
+    setPerformanceMetrics(null); // Reset performance metrics
   };
 
   const handleStartAnalysis = async () => {
@@ -310,6 +320,9 @@ function App() {
                       <ExploitsPanel
                         exploits={analysisResults.generated_pocs || []}
                       />
+                      {performanceMetrics && (
+                        <PerformanceMetricsPanel metrics={performanceMetrics} />
+                      )}
                     </div>
                   )}
                 </>
