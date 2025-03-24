@@ -22,6 +22,7 @@ class ModelConfig:
         skeptic_model: str = "o3-mini",
         exploiter_model: str = "o3-mini",
         generator_model: str = "o3-mini",
+        context_model: str = "o3-mini",
         base_url: Optional[str] = None,
         skip_poc_generation: bool = False,
         export_markdown: bool = False,
@@ -30,6 +31,7 @@ class ModelConfig:
         self.skeptic_model = skeptic_model
         self.exploiter_model = exploiter_model
         self.generator_model = generator_model
+        self.context_model = context_model
         self.base_url = base_url
         self.skip_poc_generation = skip_poc_generation
         self.export_markdown = export_markdown
@@ -87,6 +89,8 @@ class ModelConfig:
             return self.exploiter_model
         elif agent_type == "generator":
             return self.generator_model
+        elif agent_type == "context":
+            return self.context_model
         else:
             # Default to analyzer model if unknown agent type
             return self.analyzer_model

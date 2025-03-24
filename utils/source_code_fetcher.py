@@ -16,6 +16,8 @@ def fetch_and_flatten_contract(
     network: str,
     contract_address: str,
     output_file: str = "contract_flat.sol",
+    flatten: bool = True,
+    save_separate: bool = True,
 ):
     explorers = {
         "ethereum": "https://api.etherscan.io/api",
@@ -66,10 +68,79 @@ def fetch_and_flatten_contract(
     else:
         source_code = process_source_code(source_code)
 
-    with open(output_file, "w", encoding="utf-8") as f:
-        f.write(source_code)
-
-    print(f"Flattened contract saved to {output_file}")
+    # Save flattened contract file
+    if flatten:
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(source_code)
+        print(f"Flattened contract saved to {output_file}")
+    
+    # Save separate contract files
+    contract_files_map = {}
+    if save_separate:
+        # Get access to the original contract parts
+        original_contract_parts = {}
+        
+        # Check if this was a multi-file contract
+        contract_data = response["result"][0]
+        original_source = contract_data["SourceCode"].strip()
+        
+        if original_source.startswith("{{"):
+            # This is a multi-file contract
+            try:
+                parsed_code = json.loads(original_source[1:-1])  # Remove surrounding braces
+                sources = parsed_code.get("sources", {})
+                
+                # Create directory for separate contract files
+                output_dir = f"{os.path.splitext(output_file)[0]}_contracts"
+                os.makedirs(output_dir, exist_ok=True)
+                
+                for file_path, data in sources.items():
+                    # Process each contract file (optionally preserving imports)
+                    content = data["content"]
+                    processed_content = process_source_code(content, preserve_imports=True)
+                    
+                    # Determine file name and path, preserving directory structure
+                    # Get just the file name for simple cases
+                    file_name = os.path.basename(file_path)
+                    if not file_name.endswith(".sol"):
+                        file_name += ".sol"
+                    
+                    # For paths with directories, create the same structure
+                    rel_path = file_path
+                    if rel_path.startswith("/"):
+                        rel_path = rel_path[1:]
+                    
+                    target_path = os.path.join(output_dir, rel_path)
+                    if not target_path.endswith(".sol"):
+                        target_path += ".sol"
+                    
+                    # Ensure directories exist
+                    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                    
+                    # Write the individual contract file
+                    with open(target_path, "w", encoding="utf-8") as f:
+                        f.write(processed_content)
+                    
+                    contract_files_map[file_path] = target_path
+                
+                print(f"Separate contract files saved to {output_dir}")
+            except json.JSONDecodeError as e:
+                print(f"Error parsing multi-file contract source: {e}. Separate files not saved.")
+        else:
+            # This is a single-file contract
+            output_dir = f"{os.path.splitext(output_file)[0]}_contracts"
+            os.makedirs(output_dir, exist_ok=True)
+            
+            file_name = f"{contract_address}.sol"
+            target_path = os.path.join(output_dir, file_name)
+            
+            with open(target_path, "w", encoding="utf-8") as f:
+                f.write(source_code)
+                
+            contract_files_map[file_name] = target_path
+            print(f"Single contract file saved to {target_path}")
+    
+    return contract_files_map
 
 
 def order_contracts_by_references(contract_parts):
@@ -119,11 +190,12 @@ def order_contracts_by_references(contract_parts):
     return ordered_sources
 
 
-def process_source_code(source_code: str) -> str:
+def process_source_code(source_code: str, preserve_imports: bool = False) -> str:
     import re
 
-    # Remove all import statements
-    source_code = re.sub(r"^\s*import\s+.*$", "", source_code, flags=re.MULTILINE)
+    # Remove all import statements if not preserving them
+    if not preserve_imports:
+        source_code = re.sub(r"^\s*import\s+.*$", "", source_code, flags=re.MULTILINE)
 
     # Capture and remove SPDX license declarations (if any)
     spdx_pattern = re.compile(r"^\s*//\s*SPDX-License-Identifier:.*$", re.MULTILINE)
@@ -148,12 +220,12 @@ def process_source_code(source_code: str) -> str:
     return header + "\n" + source_code.strip()
 
 
-# Example usage
-output_path = os.path.join(
-    os.path.dirname(__file__), "..", "static_analysis", "test_contracts", "sample.sol"
-)
-fetch_and_flatten_contract(
-    "base",
-    "0xd990094a611c3de34664dd3664ebf979a1230fc1",
-    output_file=output_path,
-)
+# # Example usage
+# output_path = os.path.join(
+#     os.path.dirname(__file__), "..", "static_analysis", "test_contracts", "sample.sol"
+# )
+# # fetch_and_flatten_contract(
+# #     "base",
+# #     "0xd990094a611c3de34664dd3664ebf979a1230fc1",
+# #     output_file=output_path,
+# # )

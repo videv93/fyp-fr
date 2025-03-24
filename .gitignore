@@ -23,8 +23,8 @@ node_modules
 static_analysis/test_contracts/sample.sol
 
 # benchmark files
-benchmark_data
-benchmark_data_no_errors
+# benchmark_data
+# benchmark_data_no_errors
 
 # Exploit PoCs
 exploit/src/test
@@ -32,3 +32,6 @@ exploit/src/test
 # Logs
 benchmark_evaluation.log
 ctfbench_evaluation.log
+.DS_Store
+token_usage_stats.json
+.DS_Store

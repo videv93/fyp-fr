@@ -8,6 +8,7 @@ const ContractInput = ({ onContractSubmit }) => {
   const [fetchError, setFetchError] = useState(null);
   const [contractAddress, setContractAddress] = useState("");
   const [network, setNetwork] = useState("ethereum");
+  const [saveSeparate, setSaveSeparate] = useState(true);
   const fileInputRef = useRef(null);
   const dragAreaRef = useRef(null);
 
@@ -78,6 +79,7 @@ const ContractInput = ({ onContractSubmit }) => {
       const response = await fetchContractByAddress({
         address: contractAddress,
         network: network,
+        saveSeparate: saveSeparate,
       });
 
       console.log("Contract fetch response:", response.data);
@@ -171,6 +173,20 @@ const ContractInput = ({ onContractSubmit }) => {
               value={contractAddress}
               onChange={(e) => setContractAddress(e.target.value)}
             />
+          </div>
+          
+          <div className="mt-3">
+            <label className="inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                className="sr-only peer"
+                checked={saveSeparate}
+                onChange={(e) => setSaveSeparate(e.target.checked)}
+              />
+              <div className="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              <span className="ml-3 text-sm font-medium text-gray-700">Save contracts separately (preserve project structure)</span>
+            </label>
+            <p className="text-xs text-gray-500 mt-1">Enables inter-contract relationship analysis for better vulnerability detection</p>
           </div>
 
           <button

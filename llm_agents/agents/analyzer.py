@@ -6,9 +6,10 @@ from pathlib import Path
 import json
 import logging
 import os
-from utils.print_utils import print_step, print_warning, create_progress_spinner
+from utils.print_utils import print_warning, create_progress_spinner
 from openai import OpenAI
 from langchain.schema import Document
+from .project_context_llm import ProjectContextLLMAgent
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,7 @@ class AnalyzerAgent:
                 
                 # Check if retriever is enabled
                 if self.retriever:
-                    relevant_docs = self.retriever.invoke(contract_info["source_code"])
+                    relevant_docs = self.retriever.invoke(query_text)
                     progress.update(task, description=f"Found {len(relevant_docs)} relevant patterns")
                 else:
                     relevant_docs = []
@@ -184,6 +185,22 @@ class AnalyzerAgent:
                 f"Detection Strategy: {guidance['detection_strategy']}\n\n"
             )
 
+        # Inter-contract context if it was provided from previous stage
+        inter_contract_section = ""
+        if "project_context" in contract_info:
+            # Use the project_context that was already analyzed and provided
+            context = contract_info["project_context"]
+            
+            # Get ProjectContextLLMAgent to generate the prompt section
+            project_context_agent = ProjectContextLLMAgent(self.model_config)
+            inter_contract_section = project_context_agent.generate_prompt_section(context)
+            
+            # Log completion
+            stats = context.get('stats', {})
+            total_contracts = stats.get('total_contracts', 0)
+            total_relationships = stats.get('total_relationships', 0)
+            logger.info(f"Using pre-analyzed project context with {total_contracts} contracts and {total_relationships} relationships")
+        
         # Task instructions
         instructions = """\
 TASK:
@@ -227,9 +244,12 @@ Format findings as:
         full_prompt = (
             contract
             + summary
-            + category_guidance
             + snippet_text
             + detector_section
+            + "\n"
+            + inter_contract_section
+            + "\n"
+            + category_guidance
             + "\n"
             + instructions
         )
@@ -239,6 +259,9 @@ Format findings as:
         """
         Use openai.ChatCompletion with the appropriate messaging structure based on model type.
         """
+        # Import token tracker
+        from utils.token_tracker import token_tracker
+        
         # Create messages list based on model capabilities
         if not self.model_config.supports_reasoning(self.model_name):
             messages = [
@@ -262,6 +285,17 @@ Format findings as:
                 model=self.model_name,
                 messages=messages
             )
+            
+        # Track token usage
+        if hasattr(resp, 'usage') and resp.usage:
+            token_tracker.log_tokens(
+                agent_name="analyzer",
+                model_name=self.model_name,
+                prompt_tokens=resp.usage.prompt_tokens,
+                completion_tokens=resp.usage.completion_tokens,
+                total_tokens=resp.usage.total_tokens
+            )
+            
         return resp.choices[0].message.content.strip()
 
     def _parse_llm_response(self, response_text: str) -> List[Dict]:

@@ -21,6 +21,24 @@ const AnalysisOptions = ({
       <div className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
+            Context Model
+          </label>
+          <select
+            name="context_model"
+            value={options.context_model}
+            onChange={handleChange}
+            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+            disabled={isAnalyzing}
+          >
+            <option value="o3-mini">OpenAI O3 Mini</option>
+            <option value="o1-mini">OpenAI O1 Mini</option>
+            <option value="gpt-4o">GPT-4o</option>
+            <option value="claude-3-5-haiku-latest">Claude 3.5 Haiku</option>
+            <option value="claude-3-7-sonnet-latest">Claude 3.7 Sonnet</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             Analyzer Model
           </label>
           <select

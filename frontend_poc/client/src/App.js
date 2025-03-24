@@ -6,6 +6,8 @@ import AnalysisOptions from "./components/AnalysisOptions";
 import AgentVisualizer from "./components/AgentVisualizer";
 import VulnerabilitiesPanel from "./components/VulnerabilitiesPanel";
 import ExploitsPanel from "./components/ExploitsPanel";
+import ProjectContextPanel from "./components/ProjectContextPanel";
+import PerformanceMetricsPanel from "./components/PerformanceMetricsPanel";
 import { io } from "socket.io-client";
 import {
   fetchContractStatus,
@@ -25,6 +27,8 @@ function App() {
   const [completedAgents, setCompletedAgents] = useState([]);
   const [agentDetails, setAgentDetails] = useState({});
   const [ragDetails, setRagDetails] = useState([]);
+  const [projectContextData, setProjectContextData] = useState({});
+  const [performanceMetrics, setPerformanceMetrics] = useState(null);
   const [analysisOptions, setAnalysisOptions] = useState({
     analyzer_model: "o3-mini",
     skeptic_model: "o3-mini",
@@ -107,6 +111,13 @@ function App() {
         try {
           const results = await fetchContractResults(data.job_id);
           setAnalysisResults(results.data.results);
+          
+          // Set performance metrics if available
+          if (data.performance_metrics) {
+            setPerformanceMetrics(data.performance_metrics);
+          } else if (results.data.performance_metrics) {
+            setPerformanceMetrics(results.data.performance_metrics);
+          }
         } catch (error) {
           console.error("Error fetching results:", error);
         }
@@ -148,6 +159,13 @@ function App() {
         setRagDetails(data.details || []);
       }
     };
+    
+    const onProjectContextInsights = (data) => {
+      console.log("Project context insights event:", data);
+      if (currentJobRef.current?.id === data.job_id) {
+        setProjectContextData(data.details || {});
+      }
+    };
 
     const onContractFetchError = (data) => {
       console.log("Contract fetch error event:", data);
@@ -162,6 +180,7 @@ function App() {
     socket.on("agent_complete", onAgentComplete);
     socket.on("agent_status", onAgentStatus);
     socket.on("rag_details", onRagDetails);
+    socket.on("project_context_insights", onProjectContextInsights);
     socket.on("analysis_complete", onAnalysisComplete);
     socket.on("analysis_error", onAnalysisError);
     socket.on("contract_fetched", onContractFetched);
@@ -176,6 +195,7 @@ function App() {
       socket.off("agent_complete", onAgentComplete);
       socket.off("agent_status", onAgentStatus);
       socket.off("rag_details", onRagDetails);
+      socket.off("project_context_insights", onProjectContextInsights);
       socket.off("analysis_complete", onAnalysisComplete);
       socket.off("analysis_error", onAnalysisError);
       socket.off("contract_fetched", onContractFetched);
@@ -221,6 +241,8 @@ function App() {
     setCompletedAgents([]); // Reset completed agents
     setAgentDetails({}); // Reset agent details
     setRagDetails([]); // Reset RAG details
+    setProjectContextData({}); // Reset project context data
+    setPerformanceMetrics(null); // Reset performance metrics
   };
 
   const handleStartAnalysis = async () => {
@@ -281,6 +303,13 @@ function App() {
                     </div>
                   )}
 
+                  {/* Show Project Context Panel as soon as data is available */}
+                  {Object.keys(projectContextData).length > 0 && (
+                    <div className="mb-8">
+                      <ProjectContextPanel contextData={projectContextData} />
+                    </div>
+                  )}
+                  
                   {analysisResults && (
                     <div className="grid grid-cols-1 gap-6">
                       <VulnerabilitiesPanel
@@ -291,6 +320,9 @@ function App() {
                       <ExploitsPanel
                         exploits={analysisResults.generated_pocs || []}
                       />
+                      {performanceMetrics && (
+                        <PerformanceMetricsPanel metrics={performanceMetrics} />
+                      )}
                     </div>
                   )}
                 </>
