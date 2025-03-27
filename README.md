@@ -2,6 +2,31 @@
 
 This project utilises a multi-agent workflow to identify vulnerabilities and generate transactions to exploit them. 
 
+| Section                                 | Description                                                                                     |
+|-----------------------------------------|-------------------------------------------------------------------------------------------------|
+| [Introduction](#generate-vulnerable-transaction-sequences-for-smart-contract-using-large-language-models) | Project overview and key features                                                                 |
+| [How it looks via web GUI](#how-it-looks-via-web-gui)       | Visual representation of the web GUI                                                              |
+| [How it looks on CLI](#how-it-looks-on-cli)                  | Visual representation of the CLI output                                                            |
+| [Features](#features)                    | Key features of the system                                                                        |
+| [Architecture](#architecture)            | Detailed architecture of the system including the multi-agent pipeline and RAG system integration  |
+| [Key Features](#key-features)             | Additional key features of the system                                                             |
+| [Prerequisites](#prerequisites)           | System requirements and setup prerequisites                                                       |
+| [Installation](#installation)             | Step-by-step instructions to install and configure the system                                     |
+| [Usage](#usage)                           | How to use the system, including contract preparation and execution                                |
+| [Automatic PoC Execution and Fixing](#automatic-poc-execution-and-fixing) | Features related to automatic proof-of-concept execution and error correction                       |
+| [Troubleshooting Common Issues](#troubleshooting-common-issues) | How to resolve common problems encountered during execution                                        |
+
+
+
+
+### How it looks via web GUI
+![image](https://github.com/user-attachments/assets/eac050fa-2856-4f30-80f6-06192db41b4c)
+![image](https://github.com/user-attachments/assets/2c254dff-7c6e-4dc9-b70d-206f3e778e51)
+![image](https://github.com/user-attachments/assets/e2656cd4-0fa3-4d70-a8cd-550850c5daba)
+![image](https://github.com/user-attachments/assets/48be7de8-8693-49b3-911e-4f032042b77c)
+
+
+### How it looks on CLI!
 https://github.com/user-attachments/assets/8360a8b6-4ca0-49d3-be3c-94c195b3c5a3
 
 
