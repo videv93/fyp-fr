@@ -113,7 +113,12 @@ def fetch_contract_thread(job_id, network, address, output_file, save_separate=T
         # Determine if we have a contracts directory for additional analysis
         contracts_dir = None
         if save_separate and contract_files_map:
+            # Construct the expected directory name based on the output file
             contracts_dir = f"{os.path.splitext(output_file)[0]}_contracts"
+            # Verify the directory exists
+            if not os.path.isdir(contracts_dir):
+                print(f"Warning: Expected contracts directory {contracts_dir} not found after fetch.")
+                contracts_dir = None # Reset if not found
 
         jobs[job_id].update({
             'status': 'fetched',
@@ -200,23 +205,11 @@ def analyze_thread(job_id, contract_path, model_config, auto_run_config, use_rag
         # Start performance tracking
         performance_tracker.reset()
         performance_tracker.start_stage("initialization")
-        
-        # Count lines in the contract file
-        if os.path.exists(contract_path):
-            try:
-                with open(contract_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    # Count non-empty lines
-                    lines = [line for line in content.split('\n') if line.strip()]
-                    line_count = len(lines)
-                    
-                    # Set the file paths and line count directly
-                    performance_tracker.contract_files = [contract_path]
-                    performance_tracker.total_lines = line_count
-                    
-                    print(f"Contract has {line_count} non-empty lines of code")
-            except Exception as e:
-                print(f"Warning: Could not count lines in {contract_path}: {e}")
+
+        # Get job details
+        job = jobs.get(job_id, {})
+
+        # --- REMOVED log_code_analysis from here ---
 
         # Set run configuration for tracking
         run_config = {
@@ -225,7 +218,7 @@ def analyze_thread(job_id, contract_path, model_config, auto_run_config, use_rag
             "exploiter_model": model_config.exploiter_model,
             "generator_model": model_config.generator_model,
             "context_model": model_config.context_model,
-            "all_models": None,
+            "all_models": None, # Assuming this is set elsewhere or default
             "use_rag": use_rag,
             "skip_poc": model_config.skip_poc_generation,
             "auto_run": auto_run_config['auto_run']
@@ -242,16 +235,24 @@ def analyze_thread(job_id, contract_path, model_config, auto_run_config, use_rag
             'detail': 'Parsing contract code and preparing for analysis'
         })
 
+        # Determine the primary contract file or directory for Slither analysis
+        analysis_target = contract_path # Default to flattened file
+        if job.get('contracts_dir') and os.path.isdir(job['contracts_dir']):
+             # For multi-file projects, pass the directory to Slither
+             analysis_target = job['contracts_dir']
+             print(f"Using directory for static analysis: {analysis_target}")
+        else:
+             print(f"Using single file for static analysis: {analysis_target}")
+
         # Emit status update for parsing
         socketio.emit('agent_status', {
             'job_id': job_id,
             'agent': 'static_analyzer',
-            'status': 'Parsing contract',
-            'detail': 'Extracting functions, call graph, and contract structure'
+            'status': 'Parsing contract(s)',
+            'detail': f'Analyzing target: {os.path.basename(analysis_target)}'
         })
 
         # Run static analysis
-        # Add intermediate status updates during static analysis
         socketio.emit('agent_status', {
             'job_id': job_id,
             'agent': 'static_analyzer',
@@ -259,7 +260,21 @@ def analyze_thread(job_id, contract_path, model_config, auto_run_config, use_rag
             'detail': 'Executing static analysis tools to detect common vulnerabilities'
         })
 
-        function_details, call_graph, detector_results = analyze_contract(contract_path)
+        try:
+            # Pass the correct target (file or directory) to analyze_contract
+            function_details, call_graph, detector_results = analyze_contract(analysis_target)
+        except Exception as slither_error:
+            print(f"Error during Slither analysis on {analysis_target}: {slither_error}")
+            # Attempt analysis on the flattened file as a fallback if directory analysis failed
+            if analysis_target != contract_path and os.path.exists(contract_path):
+                print(f"Attempting fallback analysis on flattened file: {contract_path}")
+                try:
+                     function_details, call_graph, detector_results = analyze_contract(contract_path)
+                except Exception as fallback_error:
+                     print(f"Fallback analysis on flattened file failed: {fallback_error}")
+                     raise fallback_error # Re-raise the error if fallback also fails
+            else:
+                raise slither_error # Re-raise the original error if no fallback possible
 
         # Count the number of functions
         function_count = len(function_details) if function_details else 0
@@ -289,29 +304,33 @@ def analyze_thread(job_id, contract_path, model_config, auto_run_config, use_rag
             'result': f'Analyzed {function_count} functions'
         })
 
-        # Read contract source
+        # Read contract source (use flattened file for LLM context, or handle multi-file appropriately later)
         with open(contract_path, "r", encoding="utf-8") as f:
             source_code = f.read()
 
-        # Prepare contract info
+        # Prepare contract info for AgentCoordinator
         contract_info = {
             "function_details": function_details,
             "call_graph": call_graph,
-            "source_code": source_code,
+            "source_code": source_code, # Pass flattened source for main context
             "detector_results": detector_results,
         }
 
         # Add contracts directory for inter-contract analysis if available
-        job = jobs.get(job_id, {})
         if job.get('contracts_dir') and os.path.isdir(job['contracts_dir']):
-            contract_info["contracts_dir"] = job['contracts_dir']
+            contracts_dir = job['contracts_dir'] # Assign for later use
+            contract_info["contracts_dir"] = contracts_dir
 
-            # Count contracts to provide more detailed feedback
-            # Get contract count information - recursively search for all .sol files
-            sol_files = []
-            for root, _, files in os.walk(job['contracts_dir']):
-                sol_files.extend([os.path.join(root, f) for f in files if f.endswith('.sol')])
-            contract_count = len(sol_files)
+            # Determine file count for display (count .sol files in the directory)
+            try:
+                sol_files = []
+                for root, _, files in os.walk(contracts_dir):
+                     sol_files.extend([os.path.join(root, f) for f in files if f.endswith('.sol')])
+                contract_count = len(sol_files)
+            except Exception as count_error:
+                 print(f"Error counting files in {contracts_dir}: {count_error}")
+                 contract_count = 'Unknown'
+
 
             # Emit initial status that LLM ProjectContextAgent is starting
             socketio.emit('agent_active', {
@@ -326,8 +345,10 @@ def analyze_thread(job_id, contract_path, model_config, auto_run_config, use_rag
                 'job_id': job_id,
                 'agent': 'project_context_llm',
                 'status': 'LLM analyzing contract relationships',
-                'detail': f"Autonomously exploring contracts in {os.path.basename(job['contracts_dir'])}"
+                'detail': f"Autonomously exploring contracts in {os.path.basename(contracts_dir)}"
             })
+        else:
+            contracts_dir = None # Ensure contracts_dir is None if not applicable
 
         # Initialize agent coordinator using SocketIOAgentCoordinator to emit events
         coordinator = SocketIOAgentCoordinator(
@@ -336,7 +357,7 @@ def analyze_thread(job_id, contract_path, model_config, auto_run_config, use_rag
             use_rag=use_rag
         )
 
-        # Run analysis
+        # Run the main analysis pipeline
         results = coordinator.analyze_contract(contract_info, auto_run_config=auto_run_config)
 
         # Update job status
@@ -345,30 +366,70 @@ def analyze_thread(job_id, contract_path, model_config, auto_run_config, use_rag
             'results': results
         })
 
+        # --- MOVED log_code_analysis to here, AFTER the main pipeline ---
+        # Determine the final list of files analyzed for accurate line counting
+        files_analyzed_final = []
+        if contracts_dir and os.path.isdir(contracts_dir):
+            try:
+                # Recursively find all .sol files in the directory
+                for root, _, files in os.walk(contracts_dir):
+                    for file in files:
+                        if file.endswith('.sol'):
+                            files_analyzed_final.append(os.path.join(root, file))
+                if not files_analyzed_final: # Fallback if dir is empty
+                    if os.path.exists(contract_path):
+                        files_analyzed_final.append(contract_path)
+                        print(f"Warning: Contracts directory {contracts_dir} is empty. Logging LOC for flattened file: {contract_path}")
+                    else:
+                        print(f"Error: Contracts directory {contracts_dir} is empty and flattened file {contract_path} not found.")
+                else:
+                    print(f"Logging analysis metrics for {len(files_analyzed_final)} files from directory: {contracts_dir}")
+            except Exception as e:
+                print(f"Error walking contracts directory {contracts_dir} for final logging: {e}. Falling back to flattened file.")
+                files_analyzed_final = [contract_path] if os.path.exists(contract_path) else []
+        elif os.path.exists(contract_path):
+            files_analyzed_final.append(contract_path)
+            print(f"Logging analysis metrics for single file: {contract_path}")
+        else:
+             print(f"Error: No valid contract path or directory found for final logging for job {job_id}. Contract path: {contract_path}")
+
+        # Log code analysis using the determined files BEFORE getting the summary
+        if files_analyzed_final:
+            performance_tracker.log_code_analysis(files_analyzed_final)
+            print(f"Final LOC count: {performance_tracker.total_lines} lines across {len(files_analyzed_final)} files.")
+        else:
+             print("Warning: No files found to log for performance analysis.")
+             # Ensure metrics are zeroed if no files found
+             performance_tracker.contract_files = []
+             performance_tracker.total_lines = 0
+
+
         # Get performance metrics
         metrics = None
         if performance_tracker:
-            # End any current stage
+            # End any current stage (e.g., results_reporting from coordinator)
             if performance_tracker.current_stage is not None:
                 performance_tracker.end_stage()
 
-            # Get metrics as dictionary
+            # Get metrics as dictionary (now includes accurate LOC)
             metrics = performance_tracker.get_performance_summary()
 
             # Save metrics to a JSON file for reference
-            import json
-            from datetime import datetime
+            metrics_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            os.makedirs(metrics_dir, exist_ok=True)
 
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             metrics_file = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                metrics_dir,
                 f"performance_metrics_job_{job_id}_{timestamp}.json"
             )
 
-            with open(metrics_file, 'w') as f:
-                json.dump(metrics, f, indent=2)
-
-            print(f"Saved performance metrics to {metrics_file}")
+            try:
+                with open(metrics_file, 'w') as f:
+                    json.dump(metrics, f, indent=2)
+                print(f"Saved performance metrics to {metrics_file}")
+            except Exception as e:
+                print(f"Error saving performance metrics to {metrics_file}: {e}")
 
             # Save metrics to job data
             jobs[job_id]['performance_metrics'] = metrics
@@ -384,12 +445,19 @@ def analyze_thread(job_id, contract_path, model_config, auto_run_config, use_rag
         })
 
     except Exception as e:
-        print(f"Error in analysis: {str(e)}")
-        jobs[job_id].update({
-            'status': 'error',
-            'error': str(e)
-        })
+        print(f"Error in analysis thread for job {job_id}: {str(e)}")
+        # Ensure job_id exists before updating
+        if job_id in jobs:
+            jobs[job_id].update({
+                'status': 'error',
+                'error': str(e)
+            })
+        # Emit error event
         socketio.emit('analysis_error', {'job_id': job_id, 'error': str(e)})
+        # Optionally re-raise or log traceback
+        import traceback
+        traceback.print_exc()
+
 
 @app.route('/api/status/<job_id>', methods=['GET'])
 def get_status(job_id):
@@ -467,12 +535,24 @@ class FrontendGeneratorAgent(GeneratorAgent):
         filename = self.save_poc_locally(contract_code, vuln_type)
 
         # For the forge test command, we need to use just the relative path from within the exploit dir
-        rel_path = filename.split("exploit/")[-1] if "exploit/" in filename else filename
+        # Ensure filename is treated as an absolute path before calculating relative path
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        main_exploit_dir = os.path.join(project_root, "exploit")
+
+        if os.path.isabs(filename):
+             rel_path = os.path.relpath(filename, main_exploit_dir)
+        else:
+             # If filename is already relative (though save_poc_locally returns absolute)
+             rel_path = filename
+
+        # Make sure the relative path starts correctly for forge command
+        if not rel_path.startswith('.'):
+             rel_path = './' + rel_path
 
         return {
             "exploit_code": contract_code,
-            "exploit_file": filename,
-            "execution_command": f"forge test -vv --match-path {rel_path}"
+            "exploit_file": filename, # Return absolute path for reference
+            "execution_command": f"forge test -vv --match-path \"{rel_path}\"" # Use quotes for paths with spaces
         }
 
     def save_poc_locally(self, poc_code: str, vuln_type: str) -> str:
@@ -484,30 +564,217 @@ class FrontendGeneratorAgent(GeneratorAgent):
             vuln_type: Type of vulnerability
 
         Returns:
-            The filename where the code was saved
+            The absolute filename where the code was saved
         """
         # Use the main exploit directory instead of frontend_poc/exploit
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         main_exploit_dir = os.path.join(project_root, "exploit")
-        os.makedirs(os.path.join(main_exploit_dir, "src", "test"), exist_ok=True)
+        test_dir = os.path.join(main_exploit_dir, "src", "test")
+        os.makedirs(test_dir, exist_ok=True)
 
         ts = int(time.time())
-        rel_filename = f"src/test/PoC_{vuln_type}_{ts}.sol"
-        abs_filename = os.path.join(main_exploit_dir, rel_filename)
+        # Sanitize vuln_type for filename
+        safe_vuln_type = re.sub(r'[^\w\-]+', '_', vuln_type)
+        rel_filename = f"PoC_{safe_vuln_type}_{ts}.t.sol" # Standard forge test naming convention
+        abs_filename = os.path.join(test_dir, rel_filename)
+
+        # Extract solidity version from PoC code if possible, otherwise use default
+        pragma_match = re.search(r"pragma solidity\s+([^\;]+);", poc_code)
+        solidity_version = pragma_match.group(1).strip() if pragma_match else "^0.8.15" # Default version
+
+        # Clean the PoC code: Remove markdown code blocks if present
+        cleaned_code = poc_code
+        if cleaned_code.strip().startswith("```solidity"):
+            cleaned_code = cleaned_code.split("```solidity", 1)[1]
+        if cleaned_code.strip().endswith("```"):
+            cleaned_code = cleaned_code.rsplit("```", 1)[0]
+        cleaned_code = cleaned_code.strip()
+
+        # Ensure pragma solidity is at the top
+        if not cleaned_code.startswith("pragma solidity"):
+             # Find existing pragma and move it up, or add a new one
+             existing_pragma_match = re.search(r"pragma solidity\s+([^\;]+);", cleaned_code)
+             if existing_pragma_match:
+                 pragma_line = existing_pragma_match.group(0)
+                 cleaned_code = re.sub(r"pragma solidity\s+([^\;]+);", "", cleaned_code).strip()
+                 cleaned_code = f"{pragma_line}\n{cleaned_code}"
+             else:
+                 cleaned_code = f"pragma solidity {solidity_version};\n{cleaned_code}"
+
+        # Ensure SPDX license is present
+        if not cleaned_code.startswith("// SPDX-License-Identifier:"):
+             cleaned_code = f"// SPDX-License-Identifier: UNLICENSED\n{cleaned_code}"
+
 
         with open(abs_filename, "w", encoding="utf-8") as f:
-            f.write(poc_code)
+            f.write(cleaned_code)
 
         print(f"PoC saved to {abs_filename}")
         return abs_filename
+
+    def _generate_basetest_content(self) -> str:
+        """Generates the content for basetest.sol"""
+        # Ensure this content matches the expected basetest.sol content
+        # Consider reading from a template file if it gets complex
+        return """// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.15;
+
+import "forge-std/Test.sol";
+
+contract BaseTestWithBalanceLog is Test {
+    // Change this to the target token to get token balance of
+    // Keep it address(0) if its ETH that is gotten at the end of the exploit
+    address fundingToken = address(0);
+
+    struct ChainInfo {
+        string name;
+        string symbol;
+    }
+
+    mapping(uint256 => ChainInfo) private chainIdToInfo;
+
+    constructor() {
+        chainIdToInfo[1] = ChainInfo("MAINNET", "ETH");
+        chainIdToInfo[238] = ChainInfo("BLAST", "ETH");
+        chainIdToInfo[10] = ChainInfo("OPTIMISM", "ETH");
+        chainIdToInfo[250] = ChainInfo("FANTOM", "FTM");
+        chainIdToInfo[42_161] = ChainInfo("ARBITRUM", "ETH");
+        chainIdToInfo[56] = ChainInfo("BSC", "BNB");
+        chainIdToInfo[1285] = ChainInfo("MOONRIVER", "MOVR");
+        chainIdToInfo[100] = ChainInfo("GNOSIS", "XDAI");
+        chainIdToInfo[43_114] = ChainInfo("AVALANCHE", "AVAX");
+        chainIdToInfo[137] = ChainInfo("POLYGON", "MATIC");
+        chainIdToInfo[42_220] = ChainInfo("CELO", "CELO");
+        chainIdToInfo[8453] = ChainInfo("BASE", "ETH");
+    }
+
+    function getChainInfo(
+        uint256 chainId
+    ) internal view returns (string memory, string memory) {
+        ChainInfo storage info = chainIdToInfo[chainId];
+        return (info.name, info.symbol);
+    }
+
+    function getChainSymbol(
+        uint256 chainId
+    ) internal view returns (string memory symbol) {
+        (, symbol) = getChainInfo(chainId);
+        // Return ETH as default if chainID is not registered in mapping
+        if (bytes(symbol).length == 0) {
+            symbol = "ETH";
+        }
+    }
+
+    function getFundingBal() internal view returns (uint256) {
+        return fundingToken == address(0)
+            ? address(this).balance
+            : TokenHelper.getTokenBalance(fundingToken, address(this));
+    }
+
+    function getFundingDecimals() internal view returns (uint8) {
+        return fundingToken == address(0) ? 18 : TokenHelper.getTokenDecimals(fundingToken);
+    }
+
+    function getBaseCurrencySymbol() internal view returns (string memory) {
+        string memory chainSymbol = getChainSymbol(block.chainid);
+        return fundingToken == address(0) ? chainSymbol : TokenHelper.getTokenSymbol(fundingToken);
+    }
+
+    modifier balanceLog() {
+        uint256 initialBalance = getFundingBal();
+        logBalance("Before");
+
+        // Ensure test contract has some initial ETH (needed for gas) if tracking ETH
+        if (fundingToken == address(0) && address(this).balance < 1 ether) {
+             vm.deal(address(this), address(this).balance + 10 ether); // Ensure at least 10 ETH for gas
+        }
+
+        _; // Execute the test function
+
+        logBalance("After");
+
+        // Optional assertion: Check if balance changed as expected (e.g., increased)
+        // uint256 finalBalance = getFundingBal();
+        // assertGt(finalBalance, initialBalance, "Attacker balance did not increase");
+    }
+
+    function logBalance(
+        string memory stage
+    ) internal {
+        emit log_named_decimal_uint(
+            string(abi.encodePacked("Attacker ", getBaseCurrencySymbol(), " Balance ", stage, " exploit")),
+            getFundingBal(),
+            getFundingDecimals()
+        );
+    }
+}
+
+library TokenHelper {
+    function callTokenFunction(
+        address tokenAddress,
+        bytes memory data,
+        bool staticCall
+    ) private view returns (bytes memory) {
+        (bool success, bytes memory result) = staticCall ? tokenAddress.staticcall(data) : tokenAddress.call(data);
+        // Use view for staticcall to avoid state change errors if token isn't standard
+        // For non-static calls, we can't guarantee success without reverts
+        if (staticCall) {
+             require(success, "Staticcall to token failed");
+        } else if (!success) {
+            // Try to decode revert reason for non-static calls
+            if (result.length < 68) return bytes(""); // Not a standard revert string
+            bytes memory revertReason = abi.decode(result[4:], (bytes));
+            revert(string(revertReason));
+        }
+        return result;
+    }
+
+    function getTokenBalance(address tokenAddress, address targetAddress) internal view returns (uint256) {
+        bytes memory result =
+            callTokenFunction(tokenAddress, abi.encodeWithSignature("balanceOf(address)", targetAddress), true);
+        return abi.decode(result, (uint256));
+    }
+
+    function getTokenDecimals(
+        address tokenAddress
+    ) internal view returns (uint8) {
+        // Handle potential non-standard tokens
+        (bool success, bytes memory result) = tokenAddress.staticcall(abi.encodeWithSignature("decimals()"));
+        if (!success || result.length == 0) return 18; // Default to 18 if decimals() fails or is empty
+        try abi.decode(result, (uint8)) returns (uint8 decimals) {
+            return decimals;
+        } catch {
+            return 18; // Default if decoding fails
+        }
+    }
+
+    function getTokenSymbol(
+        address tokenAddress
+    ) internal view returns (string memory) {
+         // Handle potential non-standard tokens
+        (bool success, bytes memory result) = tokenAddress.staticcall(abi.encodeWithSignature("symbol()"));
+        if (!success || result.length == 0) return "TOKEN"; // Default if symbol() fails or is empty
+        try abi.decode(result, (string memory)) returns (string memory symbol) {
+            return symbol;
+        } catch {
+            return "TOKEN"; // Default if decoding fails
+        }
+    }
+}
+
+// Note: approveToken and transferToken removed as they cause state changes and aren't strictly needed for balance logging.
+// If needed, they should be implemented in the main test contract, not the library.
+"""
+
 
     def generate_basetest_file(self) -> str:
         """Generate basetest.sol and save it to the main exploit/src/test/basetest.sol"""
         # Use the main exploit directory
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         main_exploit_dir = os.path.join(project_root, "exploit")
-        print(main_exploit_dir)
-        abs_filename = os.path.join(main_exploit_dir, "src", "test", "basetest.sol")
+        test_dir = os.path.join(main_exploit_dir, "src", "test")
+        os.makedirs(test_dir, exist_ok=True) # Ensure directory exists
+        abs_filename = os.path.join(test_dir, "basetest.sol")
 
         # Check if basetest.sol already exists
         if os.path.exists(abs_filename):
@@ -541,33 +808,64 @@ class FrontendExploitRunner(ExploitRunner):
             # Use main exploit directory as the working directory
             project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             main_exploit_dir = os.path.join(project_root, "exploit")
-            print(main_exploit_dir)
             print(f"Executing test in directory: {main_exploit_dir}")
+            print(f"Executing command: {command}") # Log the command being executed
 
             # Execute the command
             result = subprocess.run(
                 command,
-                shell=True,
+                shell=True, # shell=True is needed for complex commands with flags
                 cwd=main_exploit_dir,
                 capture_output=True,
-                text=True
+                text=True,
+                check=False # Don't raise exception on non-zero exit code
             )
 
             # Get complete output
             output = result.stdout + "\n" + result.stderr
+            print(f"Command Output (stdout):\n{result.stdout}")
+            if result.stderr:
+                print(f"Command Output (stderr):\n{result.stderr}")
 
-            # Check if the test passed
-            if result.returncode == 0 and "FAIL" not in result.stdout:
+
+            # Check if the test passed based on forge output patterns
+            success = False
+            if "Test result: ok." in output and "0 failed" in output:
+                 success = True
+            # Handle case where specific test might pass but others fail
+            elif "[PASS]" in result.stdout and "[FAIL]" not in result.stdout:
+                 success = True
+
+            if success:
+                print("Test successful based on output.")
                 return True, output, ""
+            else:
+                print("Test failed based on output.")
+                 # Extract error message more reliably
+                error_message = "Test failed. Check logs for details."
+                # Look for common failure indicators
+                fail_pattern = r"\[FAIL.*?\]|Error:|Reverted|Panic|CompilerError"
+                fail_matches = re.findall(fail_pattern, output, re.IGNORECASE | re.DOTALL)
+                if fail_matches:
+                     # Prioritize compiler errors or explicit reverts
+                     compiler_error = next((m for m in fail_matches if "CompilerError" in m), None)
+                     revert_error = next((m for m in fail_matches if "Reverted" in m), None)
+                     if compiler_error:
+                          error_message = compiler_error
+                     elif revert_error:
+                          error_message = revert_error
+                     else:
+                          error_message = fail_matches[0] # First failure indicator found
+                     error_message = error_message.strip() # Clean up
+                # Fallback if specific patterns aren't found but command failed
+                elif result.returncode != 0:
+                     error_message = f"Forge command failed with exit code {result.returncode}. Error:\n{result.stderr[:500]}..." # Show stderr snippet
 
-            # Extract error message
-            error_pattern = r"(Error|Fail|Revert|Panic|Error:\s*.*|.*reverted.*)"
-            error_matches = re.findall(error_pattern, output, re.IGNORECASE)
-            error_message = "\n".join(error_matches) if error_matches else "Unknown error"
-
-            return False, output, error_message
+                print(f"Extracted error message: {error_message}")
+                return False, output, error_message
 
         except Exception as e:
+            print(f"Error during test execution: {str(e)}")
             return False, "", f"Error executing test: {str(e)}"
 
 # Modified version of AgentCoordinator that emits SocketIO events
@@ -578,7 +876,8 @@ class SocketIOAgentCoordinator(AgentCoordinator):
         # Replace the default runner and generator with our custom frontend versions
         self.runner = FrontendExploitRunner(model_config=model_config)
         self.generator = FrontendGeneratorAgent(model_config=model_config)
-        self.performance_tracker = None
+        # Use the global performance_tracker instance
+        self.performance_tracker = performance_tracker
 
     def analyze_contract(self, contract_info, auto_run_config=None):
         # Set default auto-run config if none provided
@@ -591,6 +890,11 @@ class SocketIOAgentCoordinator(AgentCoordinator):
         # 1. ProjectContextLLMAgent => inter-contract relationships
         if "contracts_dir" in contract_info and contract_info["contracts_dir"]:
             print(f"Emitting agent_active event for project_context_llm for job {self.job_id}")
+
+            # Start performance tracking for project context agent
+            if self.performance_tracker:
+                 self.performance_tracker.start_stage("project_context_agent")
+
             socketio.emit('agent_active', {
                 'job_id': self.job_id,
                 'agent': 'project_context_llm',
@@ -606,14 +910,14 @@ class SocketIOAgentCoordinator(AgentCoordinator):
                 'detail': 'LLM is exploring contract relationships and dependencies'
             })
 
-            # Pass the job_id to the ProjectContextLLMAgent for socketio updates
-            self.project_context.job_id = self.job_id
-
             # Run the project context analysis
             project_context_results = self.project_context.analyze_project(
                 contract_info["contracts_dir"],
                 contract_info.get("call_graph")
             )
+
+            # Add project context to contract_info for the analyzer
+            contract_info["project_context"] = project_context_results
 
             # Extract all insights from the enhanced project context structure
             insights = project_context_results.get("insights", [])
@@ -622,7 +926,7 @@ class SocketIOAgentCoordinator(AgentCoordinator):
             recommendations = project_context_results.get("recommendations", [])
             important_functions = project_context_results.get("important_functions", [])
             stats = project_context_results.get("stats", {})
-            contract_files = project_context_results.get("contract_files", [])
+            contract_files_list = project_context_results.get("contract_files", []) # Changed name to avoid conflict
 
             # Prepare comprehensive insight details for the frontend
             insight_details = {
@@ -631,7 +935,7 @@ class SocketIOAgentCoordinator(AgentCoordinator):
                 'vulnerabilities': vulnerabilities[:15],  # Potential vulnerabilities
                 'recommendations': recommendations[:15],  # Security recommendations
                 'important_functions': important_functions[:15],  # Important cross-contract functions
-                'contract_files': contract_files[:10],  # List of contract files analyzed
+                'contract_files': [os.path.basename(f) for f in contract_files_list[:10]], # Show base names
                 'stats': {
                     'total_contracts': stats.get('total_contracts', 0),
                     'total_relationships': stats.get('total_relationships', 0),
@@ -664,14 +968,14 @@ class SocketIOAgentCoordinator(AgentCoordinator):
                 })
 
             # Mark the project context agent as complete with a more comprehensive summary
-            summary = f'Analyzed {stats.get("total_contracts", 0)} contracts with '
-            parts = []
-            if insights: parts.append(f'{len(insights)} insights')
-            if dependencies: parts.append(f'{len(dependencies)} dependencies')
-            if vulnerabilities: parts.append(f'{len(vulnerabilities)} potential vulnerabilities')
-            if recommendations: parts.append(f'{len(recommendations)} recommendations')
+            summary_parts = []
+            if insights: summary_parts.append(f'{len(insights)} insights')
+            if dependencies: summary_parts.append(f'{len(dependencies)} dependencies')
+            if vulnerabilities: summary_parts.append(f'{len(vulnerabilities)} potential vulnerabilities')
+            if recommendations: summary_parts.append(f'{len(recommendations)} recommendations')
 
-            summary += ', '.join(parts)
+            summary = f'Analyzed {stats.get("total_contracts", 0)} contracts. Found: {", ".join(summary_parts)}' if summary_parts else f'Analyzed {stats.get("total_contracts", 0)} contracts.'
+
 
             socketio.emit('agent_complete', {
                 'job_id': self.job_id,
@@ -679,11 +983,18 @@ class SocketIOAgentCoordinator(AgentCoordinator):
                 'result': summary
             })
 
-            # Add project context to contract_info for the analyzer
-            contract_info["project_context"] = project_context_results
+            # End performance tracking for project context agent
+            if self.performance_tracker:
+                 self.performance_tracker.end_stage()
+
 
         # 2. Analyzer => all vulnerabilities
         print(f"Emitting agent_active event for analyzer for job {self.job_id}")
+
+        # Start performance tracking for analyzer agent
+        if self.performance_tracker:
+            self.performance_tracker.start_stage("analyzer_agent")
+
         socketio.emit('agent_active', {
             'job_id': self.job_id,
             'agent': 'analyzer',
@@ -700,7 +1011,7 @@ class SocketIOAgentCoordinator(AgentCoordinator):
         })
 
         # We need to capture the RAG details to emit them
-        if self.use_rag:
+        if self.use_rag and self.analyzer.retriever: # Check if retriever exists
             # Emit status update about RAG process starting
             socketio.emit('agent_status', {
                 'job_id': self.job_id,
@@ -709,47 +1020,64 @@ class SocketIOAgentCoordinator(AgentCoordinator):
                 'detail': 'Searching knowledge base for relevant vulnerability patterns'
             })
 
-            # Get the query text and retrieve relevant docs manually
-            query_text = self.analyzer._build_query_text(contract_info)
-            relevant_docs = self.analyzer.retriever.invoke(contract_info["source_code"])
+            try:
+                # Get the query text and retrieve relevant docs manually
+                # Use source_code from contract_info, which should be the flattened code
+                query_text = contract_info.get("source_code", "")
+                if not query_text:
+                    print("Warning: No source code found for RAG query.")
+                    relevant_docs = []
+                else:
+                    relevant_docs = self.analyzer.retriever.invoke(query_text)
 
-            # Prepare RAG details to emit
-            rag_details = []
-            for i, doc in enumerate(relevant_docs, start=1):
-                meta = doc.metadata
-                filename = meta.get('filename', 'Unknown')
-                lines_range = f"{meta.get('start_line', 0)} - {meta.get('end_line', 0)}"
-                vuln_categories = meta.get("vuln_categories", [])
-                content_preview = doc.page_content[:500] + "..." if len(doc.page_content) > 500 else doc.page_content
+                # Prepare RAG details to emit
+                rag_details = []
+                for i, doc in enumerate(relevant_docs, start=1):
+                    meta = doc.metadata
+                    filename = meta.get('filename', 'Unknown')
+                    # Ensure lines_range handles potential non-numeric values gracefully
+                    start_line = meta.get('start_line', '?')
+                    end_line = meta.get('end_line', '?')
+                    lines_range = f"{start_line}-{end_line}"
+                    vuln_categories = meta.get("vuln_categories", [])
+                    content_preview = doc.page_content[:500] + "..." if len(doc.page_content) > 500 else doc.page_content
 
-                rag_details.append({
-                    'filename': filename,
-                    'lines_range': lines_range,
-                    'vuln_categories': vuln_categories,
-                    'content_preview': content_preview
+                    rag_details.append({
+                        'filename': filename,
+                        'lines_range': lines_range,
+                        'vuln_categories': vuln_categories,
+                        'content_preview': content_preview
+                    })
+
+                # Emit RAG details
+                socketio.emit('rag_details', {
+                    'job_id': self.job_id,
+                    'details': rag_details
                 })
 
-            # Emit RAG details
-            socketio.emit('rag_details', {
-                'job_id': self.job_id,
-                'details': rag_details
-            })
-
-            # Emit status update about RAG results
-            socketio.emit('agent_status', {
-                'job_id': self.job_id,
-                'agent': 'analyzer',
-                'status': 'Retrieved similar vulnerabilities',
-                'detail': f'Found {len(relevant_docs)} similar vulnerability patterns to guide analysis'
-            })
-
-        # Start performance tracking for analyzer agent
-        if self.performance_tracker:
-            self.performance_tracker.start_stage("analyzer_agent")
+                # Emit status update about RAG results
+                socketio.emit('agent_status', {
+                    'job_id': self.job_id,
+                    'agent': 'analyzer',
+                    'status': 'Retrieved similar vulnerabilities',
+                    'detail': f'Found {len(relevant_docs)} similar vulnerability patterns to guide analysis'
+                })
+            except Exception as rag_error:
+                print(f"Error during RAG retrieval: {rag_error}")
+                socketio.emit('agent_status', {
+                    'job_id': self.job_id,
+                    'agent': 'analyzer',
+                    'status': 'RAG Retrieval Failed',
+                    'detail': f'Error: {str(rag_error)}'
+                })
 
         # Run the analyzer
         vuln_results = self.analyzer.analyze(contract_info)
         vulnerabilities = vuln_results.get("vulnerabilities", [])
+
+        # End performance tracking for analyzer agent
+        if self.performance_tracker:
+            self.performance_tracker.end_stage()
 
         # Emit status with results summary
         socketio.emit('agent_status', {
@@ -767,10 +1095,20 @@ class SocketIOAgentCoordinator(AgentCoordinator):
         })
 
         if not vulnerabilities:
-            return {"status": "no_vulnerability_found"}
+             print("No vulnerabilities found by analyzer.")
+             # Ensure performance tracking stops correctly
+             if self.performance_tracker and self.performance_tracker.current_stage is not None:
+                  self.performance_tracker.end_stage()
+             return {"status": "no_vulnerability_found", "rechecked_vulnerabilities": [], "generated_pocs": []}
+
 
         # 2. Skeptic => re-check validity
         print(f"Emitting agent_active event for skeptic for job {self.job_id}")
+
+        # Start performance tracking for skeptic agent
+        if self.performance_tracker:
+            self.performance_tracker.start_stage("skeptic_agent")
+
         socketio.emit('agent_active', {
             'job_id': self.job_id,
             'agent': 'skeptic',
@@ -790,6 +1128,10 @@ class SocketIOAgentCoordinator(AgentCoordinator):
         rechecked_vulns = self.skeptic.audit_vulnerabilities(
             contract_info["source_code"], vulnerabilities
         )
+
+        # End performance tracking for skeptic agent
+        if self.performance_tracker:
+            self.performance_tracker.end_stage()
 
         # Count high confidence vulnerabilities - with float conversion for safety
         high_conf_count = len([v for v in rechecked_vulns if float(v.get("skeptic_confidence", 0)) > 0.5])
@@ -811,18 +1153,22 @@ class SocketIOAgentCoordinator(AgentCoordinator):
 
         # 3. Generate PoCs for high-confidence vulnerabilities
         generated_pocs = []
-
-        # Generate for only one for now
         high_conf_vulns = [v for v in rechecked_vulns if float(v.get("skeptic_confidence", 0)) > 0.5]
+
         if high_conf_vulns:
             for i, vul in enumerate(high_conf_vulns):
                 # EXPLOITER AGENT
                 vuln_type = vul.get('vulnerability_type', 'Unknown')
                 print(f"Emitting agent_active event for exploiter for job {self.job_id}")
+
+                # Start performance tracking for exploiter agent
+                if self.performance_tracker:
+                     self.performance_tracker.start_stage("exploiter_agent")
+
                 socketio.emit('agent_active', {
                     'job_id': self.job_id,
                     'agent': 'exploiter',
-                    'status': 'Creating exploit plan',
+                    'status': f'Creating exploit plan ({i+1}/{len(high_conf_vulns)})',
                     'detail': f'Planning attack strategy for {vuln_type} vulnerability'
                 })
 
@@ -836,6 +1182,12 @@ class SocketIOAgentCoordinator(AgentCoordinator):
 
                 # Run the exploiter
                 plan_data = self.exploiter.generate_exploit_plan(vul)
+                # Include vulnerability info in plan_data for generator
+                plan_data["vulnerability"] = vul
+
+                # End performance tracking for exploiter agent
+                if self.performance_tracker:
+                     self.performance_tracker.end_stage()
 
                 # Get step counts for details
                 setup_steps = len(plan_data.get('exploit_plan', {}).get('setup_steps', []))
@@ -869,10 +1221,15 @@ class SocketIOAgentCoordinator(AgentCoordinator):
 
                 # GENERATOR AGENT
                 print(f"Emitting agent_active event for generator for job {self.job_id}")
+
+                # Start performance tracking for generator agent
+                if self.performance_tracker:
+                     self.performance_tracker.start_stage("generator_agent")
+
                 socketio.emit('agent_active', {
                     'job_id': self.job_id,
                     'agent': 'generator',
-                    'status': 'Generating proof-of-concept code',
+                    'status': f'Generating PoC ({i+1}/{len(high_conf_vulns)})',
                     'detail': f'Creating Foundry test for {vuln_type} vulnerability'
                 })
 
@@ -885,7 +1242,7 @@ class SocketIOAgentCoordinator(AgentCoordinator):
                 })
 
                 # The basetest.sol file is automatically created by the FrontendGeneratorAgent
-                # No need to create directories or check for file existence
+                self.generator.generate_basetest_file() # Ensure it's called
 
                 # Emit status for code generation
                 socketio.emit('agent_status', {
@@ -898,6 +1255,10 @@ class SocketIOAgentCoordinator(AgentCoordinator):
                 # Generate the PoC for this vulnerability
                 poc_data = self.generator.generate(plan_data)
                 filename = os.path.basename(poc_data.get('exploit_file', 'Unknown'))
+
+                # End performance tracking for generator agent
+                if self.performance_tracker:
+                    self.performance_tracker.end_stage()
 
                 # Emit status with file details
                 socketio.emit('agent_status', {
@@ -918,10 +1279,15 @@ class SocketIOAgentCoordinator(AgentCoordinator):
                 if auto_run_config.get("auto_run", True):
                     # RUNNER AGENT
                     print(f"Emitting agent_active event for runner for job {self.job_id}")
+
+                    # Start performance tracking for runner agent
+                    if self.performance_tracker:
+                         self.performance_tracker.start_stage("exploit_runner")
+
                     socketio.emit('agent_active', {
                         'job_id': self.job_id,
                         'agent': 'runner',
-                        'status': 'Executing proof-of-concept',
+                        'status': f'Executing PoC ({i+1}/{len(high_conf_vulns)})',
                         'detail': f'Running Foundry test for {vuln_type}'
                     })
 
@@ -930,11 +1296,16 @@ class SocketIOAgentCoordinator(AgentCoordinator):
                         'job_id': self.job_id,
                         'agent': 'runner',
                         'status': 'Running test',
-                        'detail': f'Executing {poc_data.get("execution_command", "forge test")}'
+                        'detail': f'Executing: {poc_data.get("execution_command", "forge test")}'
                     })
 
                     # Run the test
                     run_result = self.runner.run_and_fix_exploit(poc_data)
+
+                    # End performance tracking for runner agent
+                    if self.performance_tracker:
+                         self.performance_tracker.end_stage()
+
 
                     # Get detailed results for feedback
                     success = run_result.get('success', False)
@@ -966,8 +1337,12 @@ class SocketIOAgentCoordinator(AgentCoordinator):
                         "success": run_result.get("success", False),
                         "retries": run_result.get("retries", 0),
                         "error": run_result.get("error", ""),
-                        "output": run_result.get("output", "")[:500]  # Truncate long outputs
+                        "output": run_result.get("output", "")[:1000]  # Truncate long outputs
                     }
+                else:
+                     # Add placeholder if auto-run is off
+                     poc_data["execution_results"] = { "success": None, "retries": 0, "error": "Auto-run disabled", "output": "" }
+
 
                 generated_pocs.append({
                     "vulnerability": vul,
@@ -975,22 +1350,27 @@ class SocketIOAgentCoordinator(AgentCoordinator):
                     "poc_data": poc_data,
                 })
 
+        # End any potentially running agent stage before final reporting
+        if self.performance_tracker and self.performance_tracker.current_stage is not None:
+            self.performance_tracker.end_stage()
+
+        # Start performance tracking for results reporting/export
+        if self.performance_tracker:
+            self.performance_tracker.start_stage("results_reporting")
+
+        # Prepare the final result object
         result = {
             "rechecked_vulnerabilities": rechecked_vulns,
             "generated_pocs": generated_pocs,
         }
 
-        # Start performance tracking for results reporting
-        if self.performance_tracker:
-            self.performance_tracker.start_stage("results_reporting")
-
         # Export report as markdown if configured
         if self.model_config.export_markdown:
             self.export_results_to_markdown(contract_info["source_code"], result)
 
-            # Start performance tracking for export
-            if self.performance_tracker:
-                self.performance_tracker.start_stage("export")
+        # End the final stage
+        if self.performance_tracker:
+            self.performance_tracker.end_stage()
 
         return result
 
@@ -1001,160 +1381,184 @@ class SocketIOAgentCoordinator(AgentCoordinator):
 
         # Create output filename based on the job id
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads")
+        # Use the UPLOAD_FOLDER defined globally in app.py
+        output_dir = UPLOAD_FOLDER
         os.makedirs(output_dir, exist_ok=True)
-        output_file = os.path.join(output_dir, f"analysis_report_{self.job_id}_{timestamp}.md")
+        # Sanitize job_id if needed
+        safe_job_id = re.sub(r'[^\w\-]+', '_', self.job_id)
+        output_file = os.path.join(output_dir, f"analysis_report_{safe_job_id}_{timestamp}.md")
+
 
         print(f"Exporting analysis report to {output_file}")
 
         rechecked_vulns = results.get("rechecked_vulnerabilities", [])
         pocs = results.get("generated_pocs", [])
 
-        with open(output_file, "w") as f:
-            # Write header
-            f.write(f"# Smart Contract Vulnerability Analysis Report\n\n")
-            f.write(f"**Job ID:** {self.job_id}\n")
-            f.write(f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+        try:
+            with open(output_file, "w", encoding='utf-8') as f: # Specify encoding
+                # Write header
+                f.write(f"# Smart Contract Vulnerability Analysis Report\n\n")
+                f.write(f"**Job ID:** {self.job_id}\n")
+                f.write(f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
 
-            # Add a code preview (first few lines)
-            code_preview = "\n".join(contract_code.split("\n")[:20]) + "\n..."
-            f.write(f"**Contract Preview:**\n\n```solidity\n{code_preview}\n```\n\n")
+                # Add a code preview (first few lines)
+                code_preview = "\n".join(contract_code.split("\n")[:20]) + "\n..."
+                f.write(f"**Contract Preview:**\n\n```solidity\n{code_preview}\n```\n\n")
 
-            # Vulnerability summary
-            f.write(f"## Vulnerability Summary\n\n")
-            if not rechecked_vulns:
-                f.write("No vulnerabilities were detected in this contract.\n\n")
-            else:
-                f.write(f"Found {len(rechecked_vulns)} potential vulnerabilities:\n\n")
+                # Vulnerability summary
+                f.write(f"## Vulnerability Summary\n\n")
+                if not rechecked_vulns:
+                    f.write("No vulnerabilities were detected in this contract.\n\n")
+                else:
+                    f.write(f"Found {len(rechecked_vulns)} potential vulnerabilities:\n\n")
 
-                # Create a summary table
-                f.write("| # | Vulnerability Type | Confidence | Affected Functions |\n")
-                f.write("|---|-------------------|------------|--------------------|\n")
+                    # Create a summary table
+                    f.write("| # | Vulnerability Type | Confidence | Affected Functions |\n")
+                    f.write("|---|-------------------|------------|--------------------|\n")
 
-                for idx, vuln in enumerate(rechecked_vulns, start=1):
-                    vuln_type = vuln.get('vulnerability_type', 'Unknown')
-                    confidence = float(vuln.get('skeptic_confidence', 0))
-                    affected = ', '.join(vuln.get('affected_functions', ['Unknown']))
-                    f.write(f"| {idx} | {vuln_type} | {confidence:.2f} | {affected} |\n")
+                    for idx, vuln in enumerate(rechecked_vulns, start=1):
+                        vuln_type = vuln.get('vulnerability_type', 'Unknown')
+                        # Ensure confidence is float before formatting
+                        try:
+                            confidence = float(vuln.get('skeptic_confidence', 0))
+                        except (ValueError, TypeError):
+                            confidence = 0.0
+                        affected = ', '.join(vuln.get('affected_functions', ['Unknown']))
+                        f.write(f"| {idx} | {vuln_type} | {confidence:.2f} | {affected} |\n")
 
-                f.write("\n")
+                    f.write("\n")
 
-            # Detailed vulnerability analysis
-            if rechecked_vulns:
-                f.write("## Detailed Analysis\n\n")
+                # Detailed vulnerability analysis
+                if rechecked_vulns:
+                    f.write("## Detailed Analysis\n\n")
 
-                for idx, vuln in enumerate(rechecked_vulns, start=1):
-                    vuln_type = vuln.get('vulnerability_type', 'Unknown')
-                    confidence = float(vuln.get('skeptic_confidence', 0))
+                    for idx, vuln in enumerate(rechecked_vulns, start=1):
+                        vuln_type = vuln.get('vulnerability_type', 'Unknown')
+                        try:
+                             confidence = float(vuln.get('skeptic_confidence', 0))
+                        except (ValueError, TypeError):
+                             confidence = 0.0
 
-                    f.write(f"### Vulnerability #{idx}: {vuln_type}\n\n")
-                    f.write(f"**Confidence:** {confidence:.2f}\n\n")
 
-                    if vuln.get('reasoning'):
-                        f.write(f"**Reasoning:**\n\n{vuln.get('reasoning')}\n\n")
+                        f.write(f"### Vulnerability #{idx}: {vuln_type}\n\n")
+                        f.write(f"**Confidence:** {confidence:.2f}\n\n")
 
-                    if vuln.get('validity_reasoning'):
-                        f.write(f"**Validation:**\n\n{vuln.get('validity_reasoning')}\n\n")
+                        if vuln.get('reasoning'):
+                            f.write(f"**Reasoning:**\n\n```\n{vuln.get('reasoning')}\n```\n\n") # Use code block for reasoning
 
-                    if vuln.get('code_snippet'):
-                        f.write(f"**Code Snippet:**\n\n```solidity\n{vuln.get('code_snippet')}\n```\n\n")
+                        if vuln.get('validity_reasoning'):
+                            f.write(f"**Validation:**\n\n```\n{vuln.get('validity_reasoning')}\n```\n\n") # Use code block
 
-                    if vuln.get('affected_functions'):
-                        f.write(f"**Affected Functions:** {', '.join(vuln.get('affected_functions'))}\n\n")
+                        if vuln.get('code_snippet'):
+                            f.write(f"**Code Snippet:**\n\n```solidity\n{vuln.get('code_snippet')}\n```\n\n")
 
-                    # Look for a corresponding PoC
-                    matching_poc = next((p for p in pocs if p["vulnerability"].get("vulnerability_type") == vuln_type), None)
-                    if matching_poc and matching_poc.get("exploit_plan"):
-                        f.write("**Exploit Plan:**\n\n")
+                        if vuln.get('affected_functions'):
+                            f.write(f"**Affected Functions:** {', '.join(vuln.get('affected_functions'))}\n\n")
 
-                        # Add all steps from the exploit plan
-                        plan = matching_poc["exploit_plan"]
+                        # Look for a corresponding PoC
+                        matching_poc = next((p for p in pocs if p.get("vulnerability", {}).get("vulnerability_type") == vuln_type), None)
+                        if matching_poc and matching_poc.get("exploit_plan"):
+                            f.write("**Exploit Plan:**\n\n")
 
-                        if plan.get("setup_steps"):
-                            f.write("*Setup Steps:*\n\n")
-                            for step in plan.get("setup_steps", []):
-                                f.write(f"- {step}\n")
-                            f.write("\n")
+                            # Add all steps from the exploit plan
+                            plan = matching_poc["exploit_plan"]
 
-                        if plan.get("execution_steps"):
-                            f.write("*Execution Steps:*\n\n")
-                            for step in plan.get("execution_steps", []):
-                                f.write(f"- {step}\n")
-                            f.write("\n")
+                            if plan.get("setup_steps"):
+                                f.write("*Setup Steps:*\n\n")
+                                for step in plan.get("setup_steps", []):
+                                    f.write(f"- {step}\n")
+                                f.write("\n")
 
-                        if plan.get("validation_steps"):
-                            f.write("*Validation Steps:*\n\n")
-                            for step in plan.get("validation_steps", []):
-                                f.write(f"- {step}\n")
-                            f.write("\n")
+                            if plan.get("execution_steps"):
+                                f.write("*Execution Steps:*\n\n")
+                                for step in plan.get("execution_steps", []):
+                                    f.write(f"- {step}\n")
+                                f.write("\n")
 
-                    # Add a separator between vulnerabilities
-                    f.write("---\n\n")
+                            if plan.get("validation_steps"):
+                                f.write("*Validation Steps:*\n\n")
+                                for step in plan.get("validation_steps", []):
+                                    f.write(f"- {step}\n")
+                                f.write("\n")
 
-            # PoC information if any were generated and not skipped
-            if pocs and any("poc_data" in poc for poc in pocs):
-                f.write("## Proof of Concept Exploits\n\n")
+                        # Add a separator between vulnerabilities
+                        f.write("---\n\n")
 
-                for idx, poc in enumerate(pocs, start=1):
-                    if "poc_data" not in poc:
-                        continue
+                # PoC information if any were generated and not skipped
+                if pocs and any("poc_data" in poc for poc in pocs):
+                    f.write("## Proof of Concept Exploits\n\n")
 
-                    vuln = poc['vulnerability']
-                    vuln_type = vuln.get('vulnerability_type', 'Unknown')
+                    for idx, poc in enumerate(pocs, start=1):
+                        if "poc_data" not in poc:
+                            continue
 
-                    f.write(f"### PoC #{idx}: {vuln_type}\n\n")
+                        vuln = poc['vulnerability']
+                        vuln_type = vuln.get('vulnerability_type', 'Unknown')
 
-                    poc_data = poc["poc_data"]
-                    f.write(f"**File:** {poc_data.get('exploit_file', 'N/A')}\n\n")
+                        f.write(f"### PoC #{idx}: {vuln_type}\n\n")
 
-                    # Add execution results if available
-                    if "execution_results" in poc_data:
-                        results = poc_data["execution_results"]
-                        if results.get("success"):
-                            f.write("**Execution:** ✅ SUCCESS\n\n")
-                        else:
-                            f.write(f"**Execution:** ❌ FAILED after {results.get('retries', 0)} fix attempts\n\n")
+                        poc_data = poc["poc_data"]
+                        exploit_file = poc_data.get('exploit_file', 'N/A')
+                        f.write(f"**File:** `{os.path.basename(exploit_file)}`\n\n") # Show only basename
 
-                            if results.get("error"):
-                                f.write(f"**Error:** {results.get('error')}\n\n")
+                        # Add execution results if available
+                        if "execution_results" in poc_data:
+                            results_data = poc_data["execution_results"] # Renamed variable
+                            if results_data.get("success"):
+                                f.write("**Execution:** ✅ SUCCESS\n\n")
+                            elif results_data.get("success") is False: # Explicitly check for False
+                                f.write(f"**Execution:** ❌ FAILED after {results_data.get('retries', 0)} fix attempts\n\n")
 
-                    # Add PoC code if available
-                    if poc_data.get("exploit_code"):
-                        f.write("**Exploit Code:**\n\n```solidity\n")
-                        f.write(poc_data.get("exploit_code"))
-                        f.write("\n```\n\n")
+                                if results_data.get("error"):
+                                    f.write(f"**Error:**\n```\n{results_data.get('error')}\n```\n\n")
+                            else: # Handle case where success is None (e.g., auto-run disabled)
+                                 f.write(f"**Execution:** ❔ SKIPPED (Auto-run disabled)\n\n")
 
-                    # Add a separator between PoCs
-                    f.write("---\n\n")
+                        # Add PoC code if available
+                        if poc_data.get("exploit_code"):
+                            f.write("**Exploit Code:**\n\n```solidity\n")
+                            f.write(poc_data.get("exploit_code"))
+                            f.write("\n```\n\n")
 
-            # Footer with recommendations
-            f.write("## Recommendations\n\n")
-            f.write("For each identified vulnerability, consider implementing the following mitigations:\n\n")
+                        # Add a separator between PoCs
+                        f.write("---\n\n")
 
-            # Add generic recommendations based on found vulnerability types
-            vuln_types = [v.get('vulnerability_type', '').lower() for v in rechecked_vulns]
+                # Footer with recommendations
+                f.write("## Recommendations\n\n")
+                f.write("For each identified vulnerability, consider implementing the following mitigations:\n\n")
 
-            if any('reentrancy' in vt for vt in vuln_types):
-                f.write("- **For Reentrancy**: Implement checks-effects-interactions pattern and consider using ReentrancyGuard.\n")
+                # Add generic recommendations based on found vulnerability types
+                found_vuln_types = {v.get('vulnerability_type', '').lower() for v in rechecked_vulns}
 
-            if any('overflow' in vt or 'underflow' in vt or 'arithmetic' in vt for vt in vuln_types):
-                f.write("- **For Arithmetic Issues**: Use SafeMath library or Solidity 0.8.x built-in overflow checking.\n")
+                if any('reentrancy' in vt for vt in found_vuln_types):
+                    f.write("- **For Reentrancy**: Implement checks-effects-interactions pattern and consider using OpenZeppelin's ReentrancyGuard.\n")
 
-            if any('access' in vt or 'authorization' in vt or 'permission' in vt for vt in vuln_types):
-                f.write("- **For Access Control**: Implement proper authorization checks and use the Ownable pattern.\n")
+                if any(term in vt for vt in found_vuln_types for term in ['overflow', 'underflow', 'arithmetic']):
+                    f.write("- **For Arithmetic Issues**: Use Solidity 0.8.x+ for built-in overflow/underflow checks or use OpenZeppelin's SafeMath library for older versions.\n")
 
-            if any('oracle' in vt or 'price' in vt for vt in vuln_types):
-                f.write("- **For Oracle Manipulation**: Use time-weighted average prices and multiple independent oracle sources.\n")
+                if any(term in vt for vt in found_vuln_types for term in ['access', 'authorization', 'permission']):
+                    f.write("- **For Access Control**: Implement proper authorization checks (e.g., `onlyOwner`, role-based access control) and verify access control logic thoroughly.\n")
 
-            # Add a general recommendation
-            f.write("- **For All Vulnerabilities**: Consider a professional audit before deploying to production.\n\n")
+                if any(term in vt for vt in found_vuln_types for term in ['oracle', 'price']):
+                    f.write("- **For Oracle Manipulation**: Use time-weighted average prices (TWAP) and consider using multiple independent oracle sources (e.g., Chainlink Price Feeds).\n")
 
-            f.write("*This report was generated automatically by the Smart Contract Vulnerability Analyzer.*\n")
+                if any('unchecked' in vt for vt in found_vuln_types):
+                     f.write("- **For Unchecked Calls/Returns**: Always check the return value of low-level calls and external contract calls. Use `call` with caution.\n")
+
+                # Add a general recommendation
+                f.write("- **For All Vulnerabilities**: Conduct thorough testing, including unit tests, integration tests, and fuzzing. Consider a professional security audit before deploying to mainnet.\n\n")
+
+                f.write("*This report was generated automatically by the Smart Contract Vulnerability Analyzer.*\n")
+
+        except Exception as e:
+            print(f"Error writing markdown report to {output_file}: {e}")
+            # Don't emit if writing failed
+            return
 
         # Also emit an event to notify the frontend
         socketio.emit('report_exported', {
             'job_id': self.job_id,
-            'report_path': os.path.basename(output_file),
+            'report_path': os.path.basename(output_file), # Send only basename
             'filename': os.path.basename(output_file)
         })
 
