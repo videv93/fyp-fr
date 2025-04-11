@@ -25,7 +25,7 @@
 
 ### Web GUI (Example Interface)
 
-*Note: The core logic runs via CLI; a GUI might be built separately.*
+*Note: The system includes a web-based frontend in the `frontend_poc` directory. See the [Installation & Setup](#installation--setup) section for instructions on how to run it.*
 
 ![image](https://github.com/user-attachments/assets/eac050fa-2856-4f30-80f6-06192db41b4c)
 *(Example: Contract input)*
@@ -268,6 +268,34 @@ Before you begin, ensure you have the following installed and configured:
     *   `forge --version`
     *   `solc-select use 0.8.0` (or your desired version)
     *   `solc --version`
+
+8.  **Web Frontend Setup (Optional):**
+    The project includes a web-based user interface for easier interaction with the system.
+    
+    **Backend Setup:**
+    ```bash
+    # Install additional dependencies for the Flask backend
+    pip install flask flask-socketio flask-cors
+    
+    # Run the Flask server (from project root)
+    cd frontend_poc
+    python app.py
+    # Server will start on http://localhost:5000
+    ```
+    
+    **Frontend Development Setup (Optional):**
+    For development or customizing the frontend (a pre-built version is already included):
+    ```bash
+    # Navigate to frontend directory
+    cd frontend_poc/client
+    
+    # Install NPM dependencies
+    npm install
+    
+    # Start development server
+    npm start
+    # Development server will run on http://localhost:3000
+    ```
 
 ---
 

@@ -103,18 +103,18 @@ graph TB
     runner --> md
     runner --> json
     runner --> pocs
-    
+
     api --> local
     api --> multi
     api --> blockchain
-    
+
     context --> socket
     analyzer --> socket
     skeptic --> socket
     exploiter --> socket
     generator --> socket
     runner --> socket
-    
+
     socket --> dashboard
 
     classDef primary fill:#d1e7dd,stroke:#000
@@ -404,7 +404,7 @@ To set up the web frontend:
    ```bash
    npm start
    ```
-   
+
    Or use the pre-built version:
    ```bash
    # The backend will serve the pre-built frontend from the client/build directory
@@ -442,21 +442,6 @@ The web frontend provides several advantages over the command-line interface:
    - Statistics and recommendations for complex projects
 
 ### Architecture
-
-The frontend system consists of:
-
-```
-frontend_poc/
-├── app.py                 # Flask backend server
-└── client/                # React frontend application
-    ├── src/
-    │   ├── components/    # UI components
-    │   ├── services/      # API and WebSocket services
-    │   ├── pages/         # Main application pages
-    │   ├── context/       # React context providers
-    │   └── visualizer/    # Agent workflow visualization
-    └── build/             # Pre-built frontend files
-```
 
 The architecture follows a client-server model:
 
