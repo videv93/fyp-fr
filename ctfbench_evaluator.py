@@ -42,7 +42,7 @@ logging.basicConfig(
 logger = logging.getLogger("ctfbench_evaluator")
 
 # Constants
-UPLOADS_DIR = "uploads"
+UPLOADS_DIR = "reports"
 BENCHMARK_DATA_DIR = "benchmark_data"
 BENCHMARK_RESULTS_DIR = "benchmark_results"
 
@@ -136,11 +136,11 @@ class CTFBenchEvaluator:
         # Check with_error and no_error directories
         with_error_dir = self.uploads_dir / WITH_ERROR_DIR
         no_error_dir = self.uploads_dir / NO_ERROR_DIR
-        
+
         if not os.path.exists(with_error_dir):
             logger.warning(f"With-error directory {with_error_dir} does not exist. Creating it...")
             os.makedirs(with_error_dir, exist_ok=True)
-            
+
         if not os.path.exists(no_error_dir):
             logger.warning(f"No-error directory {no_error_dir} does not exist. Creating it...")
             os.makedirs(no_error_dir, exist_ok=True)
@@ -201,7 +201,7 @@ class CTFBenchEvaluator:
         # Check if uploads directory exists
         with_error_dir = self.uploads_dir / WITH_ERROR_DIR
         no_error_dir = self.uploads_dir / NO_ERROR_DIR
-        
+
         if not os.path.exists(with_error_dir) or not os.path.exists(no_error_dir):
             logger.error(f"Required directories {with_error_dir} or {no_error_dir} do not exist")
             return {}
@@ -221,19 +221,19 @@ class CTFBenchEvaluator:
         all_results = {}
         for report_dir in report_dirs:
             logger.info(f"Evaluating reports in {report_dir}")
-            
+
             # Evaluate reports with errors (for VDR)
             with_error_results = await self.evaluate_directory(report_dir, is_with_error=True)
-            
+
             # Evaluate reports without errors (for OI)
             no_error_results = await self.evaluate_directory(report_dir, is_with_error=False)
-            
+
             # Combine results
             combined_results = {
                 "with_error": with_error_results,
                 "no_error": no_error_results
             }
-            
+
             all_results[report_dir] = combined_results
 
         self.results = all_results
@@ -253,7 +253,7 @@ class CTFBenchEvaluator:
         # Determine the base directory based on whether we're evaluating with_error or no_error
         base_dir = self.uploads_dir / (WITH_ERROR_DIR if is_with_error else NO_ERROR_DIR)
         dir_path = base_dir / report_dir
-        
+
         if not dir_path.exists() or not dir_path.is_dir():
             logger.error(f"Directory {dir_path} does not exist")
             return {}
@@ -265,7 +265,7 @@ class CTFBenchEvaluator:
         # Process all reports
         results = {}
         error_reports = []
-        
+
         for report_file in report_files:
             category = self._get_category_from_filename(report_file.name)
             if category:
@@ -645,7 +645,7 @@ Provide just a number:"""
 
         # Try to get response with retries
         false_positives = 0
-        
+
         for attempt in range(EVAL_MAX_ATTEMPTS):
             try:
                 fp_response = await self.client.chat.completions.create(
@@ -729,23 +729,23 @@ Provide just a number:"""
         """
         # Count occurrences of security-related terms and vulnerability mentions
         security_terms = [
-            "vulnerability", "attack", "exploit", "security issue", "risk", "bug", "flaw", 
+            "vulnerability", "attack", "exploit", "security issue", "risk", "bug", "flaw",
             "weakness", "threat", "compromise", "breach", "critical", "severe"
         ]
-        
+
         # Count mentions of specific vulnerability types
         vuln_types = [
             "reentrancy", "overflow", "underflow", "access control", "authorization",
             "front-running", "oracle manipulation", "price manipulation", "flash loan attack",
-            "time manipulation", "randomness", "denial of service", "dos", "unchecked", 
+            "time manipulation", "randomness", "denial of service", "dos", "unchecked",
             "gas", "precision", "arithmetic", "rounding", "race condition"
         ]
-        
+
         # Count lines mentioning vulnerabilities
         fp_count = 0
         lines = report_content.lower().split('\n')
         counted_vulns = set()  # Track already counted vulnerability types
-        
+
         for line in lines:
             # Check for vulnerability mentions
             for vuln in vuln_types:
@@ -754,7 +754,7 @@ Provide just a number:"""
                     counted_vulns.add(vuln)
                     fp_count += 1
                     break
-        
+
         return fp_count
 
     def _extract_key_terms(self, text: str) -> List[str]:
@@ -820,22 +820,22 @@ Provide just a number:"""
         """
         # First, remove file extension
         base_name = os.path.splitext(filename)[0]
-        
+
         # Check for direct category match
         for category in CATEGORIES:
             if category == base_name:
                 return category
-                
+
         # Check for category in the filename
         for category in CATEGORIES:
             if category in filename.lower():
                 return category
 
         # If no direct match, try to parse from filename patterns
-        # Example patterns: 
+        # Example patterns:
         # - "category.md"
         # - "analysis_report_Contract.sol_timestamp.md"
-        
+
         # Try to match known contract names to categories
         contract_to_category = {
             "Voting": "access_control",
@@ -846,11 +846,11 @@ Provide just a number:"""
             "MerkleDrop": "gas_security",
             "EncryptedStorage": "privacy_crypto_security"
         }
-        
+
         for contract, category in contract_to_category.items():
             if contract in filename:
                 return category
-                
+
         # Parse parts of the filename to find a match
         parts = filename.split('_')
         for category in CATEGORIES:
@@ -876,38 +876,38 @@ Provide just a number:"""
         for report_dir, results in self.results.items():
             with_error_results = results.get("with_error", {})
             no_error_results = results.get("no_error", {})
-            
+
             # Process with_error results for VDR
             total_tp = 0
             total_fn = 0
-            
+
             for category, result in with_error_results.items():
                 total_tp += result.get("true_positive", 0)
                 total_fn += result.get("false_negative", 0)
-            
+
             # Process no_error results for OI
             total_fp = 0
             total_loc = 0
-            
+
             for category, result in no_error_results.items():
                 total_fp += result.get("false_positive", 0)
                 total_loc += result.get("lines_of_code", 0)
-            
+
             # Calculate CTFBench metrics
             # VDR (Vulnerability Detection Rate)
             total_vulns = total_tp + total_fn
             vdr = total_tp / total_vulns if total_vulns > 0 else 0
-            
+
             # OI (Overreporting Index)
             oi = total_fp / total_loc if total_loc > 0 else 0
-            
+
             # Add evaluation methods used
             evaluation_methods = defaultdict(int)
             for results_dict in [with_error_results, no_error_results]:
                 for result in results_dict.values():
                     method = result.get("evaluation_method", "unknown")
                     evaluation_methods[method] += 1
-            
+
             # Store summary
             summary[report_dir] = {
                 "vdr": vdr,
@@ -1062,11 +1062,11 @@ Provide just a number:"""
         # Process with_error results for VDR by category
         for model, results in self.results.items():
             with_error_results = results.get("with_error", {})
-            
+
             for category, result in with_error_results.items():
                 if category not in categories:
                     categories.append(category)
-                
+
                 # VDR is true_positive for each category (1 vulnerability per contract)
                 model_vdr_scores[model].append({
                     "category": category,
@@ -1120,16 +1120,16 @@ Provide just a number:"""
         # Process no_error results for OI by category
         for model, results in self.results.items():
             no_error_results = results.get("no_error", {})
-            
+
             for category, result in no_error_results.items():
                 if category not in categories:
                     categories.append(category)
-                
+
                 # Calculate OI for each category
                 fp = result.get("false_positive", 0)
                 loc = result.get("lines_of_code", 0)
                 oi = fp / loc if loc > 0 else 0
-                
+
                 model_oi_scores[model].append({
                     "category": category,
                     "oi": oi
