@@ -35,3 +35,6 @@ ctfbench_evaluation.log
 .DS_Store
 token_usage_stats.json
 .DS_Store
+
+# Ignore all Pycache
+**/__pycache__/
