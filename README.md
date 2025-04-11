@@ -1,6 +1,6 @@
 # FYP: Generate Vulnerable Transaction Sequences for Smart Contract using Large Language Models
 
-# AuditAgent: LLM-Powered Smart Contract Vulnerability Analysis & Exploit Generation
+## AuditAgent: LLM-Powered Smart Contract Vulnerability Analysis & Exploit Generation
 
 **AuditAgent** is an advanced system that leverages a multi-agent Large Language Model (LLM) workflow to automatically analyze smart contracts, identify potential vulnerabilities, and generate proof-of-concept (PoC) exploit code. It integrates static analysis, Retrieval-Augmented Generation (RAG), and a pipeline of specialized AI agents to provide deep security insights.
 
@@ -15,6 +15,8 @@
 | [Installation & Setup](#installation--setup)    | Step-by-step guide to get the system running.                                   |
 | [Running an Analysis](#running-an-analysis)     | How to use the CLI to analyze contracts.                                        |
 | [Command-Line Flags Explained](#command-line-flags-explained) | Detailed breakdown of all available options.                          |
+| [Web Frontend](#web-frontend)                   | Details on the interactive web user interface.                                  |
+| [Benchmarking and Evaluation](#benchmarking-and-evaluation) | Tools to evaluate system performance.                                 |
 | [Understanding the Output](#understanding-the-output) | What files are created and how to interpret the results.                      |
 | [Automatic PoC Execution & Fixing](#automatic-poc-execution--fixing) | Details on the automated exploit testing and self-correction feature.         |
 | [Troubleshooting](#troubleshooting)             | Solutions for common setup and execution issues.                                |
@@ -74,6 +76,8 @@ AuditAgent follows a sophisticated pipeline to analyze smart contracts:
 *   **Automatic PoC Generation:** Creates Foundry test files demonstrating exploits.
 *   **Self-Correcting PoC Execution:** Automatically runs and attempts to fix generated exploit code.
 *   **Flexible LLM Configuration:** Supports various models (OpenAI, Anthropic, etc.) and allows different models per agent.
+*   **Comprehensive Benchmarking:** Tools to evaluate vulnerability detection and exploit generation performance.
+*   **Web-Based User Interface:** Interactive frontend for visualization of analysis process and results.
 *   **Detailed Reporting:** Provides console output, Markdown reports, and JSON exports.
 *   **Performance Tracking:** Logs token usage and execution time for analysis.
 
@@ -213,8 +217,8 @@ Before you begin, ensure you have the following installed and configured:
 
 1.  **Clone the Repository:**
     ```bash
-    git clone https://github.com/your-username/AuditAgent.git # Replace with your repo URL
-    cd AuditAgent
+    git clone https://github.com/your-username/fyp-fr.git # Replace with your repo URL
+    cd fyp-fr
     ```
 
 2.  **Initialize Foundry Project & Submodules:**
@@ -239,7 +243,7 @@ Before you begin, ensure you have the following installed and configured:
     ```
 
 5.  **Set Up Environment Variables:**
-    Create a `.env` file in the project root directory (`AuditAgent/`). Add your API keys:
+    Create a `.env` file in the project root directory (`fyp-fr/`). Add your API keys:
     ```dotenv
     # --- LLM Keys ---
     OPENAI_API_KEY="sk-YourOpenAIKeyHere"
@@ -258,50 +262,30 @@ Before you begin, ensure you have the following installed and configured:
     ```
     *Only include keys for the services you intend to use.*
 
-6.  **Initialize Pinecone Index (Optional - for RAG):**
+6.  **Install Solidity Compiler**:
+   ```bash
+   pip install solc-select
+   solc-select install 0.8.0  # Or the version needed
+   solc-select use 0.8.0  # Set as default
+   ```
+
+7.  **Initialize Pinecone Index (Optional - for RAG):**
     If you plan to use the RAG feature (`--no-rag` is *not* specified), you need to populate the Pinecone index. This typically involves running a separate script (check `rag/doc_db.py` or similar) to process the `known_vulnerabilities/contract_vulns.json` file and upload embeddings. Ensure your `.env` file has `PINECONE_API_KEY` and `PINECONE_ENV`. The system might attempt to create the index (`fyp` by default) if it doesn't exist when first run with RAG enabled.
 
-7.  **Verify Installations:**
-    *   `python --version`
-    *   `pip --version`
-    *   `slither --version`
-    *   `forge --version`
-    *   `solc-select use 0.8.0` (or your desired version)
-    *   `solc --version`
-
-8.  **Web Frontend Setup (Optional):**
-    The project includes a web-based user interface for easier interaction with the system.
-    
-    **Backend Setup:**
+8.  **Verify Installations:**
     ```bash
-    # Install additional dependencies for the Flask backend
-    pip install flask flask-socketio flask-cors
-    
-    # Run the Flask server (from project root)
-    cd frontend_poc
-    python app.py
-    # Server will start on http://localhost:5000
-    ```
-    
-    **Frontend Development Setup (Optional):**
-    For development or customizing the frontend (a pre-built version is already included):
-    ```bash
-    # Navigate to frontend directory
-    cd frontend_poc/client
-    
-    # Install NPM dependencies
-    npm install
-    
-    # Start development server
-    npm start
-    # Development server will run on http://localhost:3000
+    python --version
+    pip --version
+    slither --version
+    forge --version
+    solc --version
     ```
 
 ---
 
 ## Running an Analysis
 
-Execute the main script from the project's root directory (`AuditAgent/`).
+Execute the main script from the project's root directory (`fyp-fr/`).
 
 **1. Analyzing a Local Contract File:**
 
@@ -375,6 +359,27 @@ python main.py --export-md --contract examples/VulnerableLendingContract.sol
 python main.py --export-json analysis_results.json --contract examples/VulnerableLendingContract.sol
 ```
 
+**8. Optimizing for Different Scenarios:**
+
+**Quick Analysis (No PoC Generation)**:
+```bash
+python main.py --skip-poc --no-rag --contract examples/VulnerableLendingContract.sol
+```
+
+**Thorough Analysis with High-Quality LLMs**:
+```bash
+python main.py \
+  --analyzer-model claude-3-7-sonnet-latest \
+  --skeptic-model claude-3-7-sonnet-latest \
+  --generator-model claude-3-7-sonnet-latest \
+  --contract examples/VulnerableLendingContract.sol
+```
+
+**Analysis with Detailed Reports**:
+```bash
+python main.py --export-md --export-json results.json --contract examples/VulnerableLendingContract.sol
+```
+
 ---
 
 ## Command-Line Flags Explained
@@ -398,6 +403,198 @@ python main.py --export-json analysis_results.json --contract examples/Vulnerabl
 | `--max-retries`         | `integer`              | `3`                                   | Maximum number of times the `ExploitRunner` will attempt to fix a failing PoC test using the LLM.                                          |
 | `--export-md`           | (flag)                 | False                                 | Generate a detailed analysis report in Markdown format in the root directory.                                                              |
 | `--export-json`         | `path`                 | None                                  | Export detailed analysis results (vulnerabilities, PoCs, execution status) to the specified JSON file path.                                |
+
+---
+
+## Web Frontend
+
+AuditAgent includes a web-based frontend interface that provides a user-friendly way to interact with the system, visualize the analysis process, and explore results.
+
+### Setup and Installation
+
+To set up the web frontend:
+
+1. **Navigate to the frontend directory**:
+   ```bash
+   cd frontend_poc
+   ```
+
+2. **Install backend dependencies**:
+   ```bash
+   pip install flask flask-socketio flask-cors
+   ```
+
+3. **Start the backend server**:
+   ```bash
+   python app.py
+   ```
+
+4. **Install frontend dependencies** (in a separate terminal):
+   ```bash
+   cd frontend_poc/client
+   npm install
+   ```
+
+5. **Start the development server**:
+   ```bash
+   npm start
+   ```
+
+   Or use the pre-built version:
+   ```bash
+   # The backend will serve the pre-built frontend from the client/build directory
+   # Just run app.py and navigate to http://localhost:5000
+   ```
+
+### Key Features
+
+The web frontend provides several advantages over the command-line interface:
+
+1. **Interactive Contract Input**:
+   - Upload local Solidity files through drag-and-drop
+   - Fetch contracts directly from blockchain by address
+   - Support for multi-file project uploads
+
+2. **Customizable Analysis Configuration**:
+   - Select different LLM models for each agent
+   - Toggle RAG functionality
+   - Configure PoC generation and execution settings
+
+3. **Real-Time Process Visualization**:
+   - Live agent activity indicators
+   - Step-by-step workflow visualization
+   - Progress tracking for each analysis stage
+
+4. **Enhanced Results Exploration**:
+   - Interactive vulnerability cards with expandable details
+   - Syntax-highlighted code with vulnerability locations
+   - Collapsible exploit plans and PoC code
+   - Execution status indicators for generated exploits
+
+5. **Project Context Insights** (for multi-contract projects):
+   - Contract relationship visualization
+   - Cross-contract vulnerability highlighting
+   - Statistics and recommendations for complex projects
+
+### Architecture
+
+The architecture follows a client-server model:
+
+1. **Backend** (Flask + Flask-SocketIO):
+   - Interfaces with the core AuditAgent system
+   - Provides RESTful API endpoints
+   - Implements real-time communication with WebSockets
+   - Manages analysis jobs and their states
+
+2. **Frontend** (React):
+   - Responsive user interface built with React and Tailwind CSS
+   - Real-time updates using Socket.io client
+   - Interactive visualization with React Flow
+   - Code highlighting with Prism.js
+
+### API Endpoints
+
+The frontend server exposes several API endpoints:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/upload-contract` | POST | Upload a Solidity file or project |
+| `/api/fetch-contract` | POST | Fetch contract from blockchain by address |
+| `/api/analyze` | POST | Start analysis with specified options |
+| `/api/status/:jobId` | GET | Get analysis status for a specific job |
+| `/api/results/:jobId` | GET | Get complete analysis results |
+| `/api/performance/:jobId` | GET | Get performance metrics for an analysis |
+
+### WebSocket Events
+
+The system uses WebSocket for real-time updates:
+
+| Event | Direction | Description |
+|-------|-----------|-------------|
+| `agent_active` | Server → Client | Notifies when an agent starts working |
+| `agent_status` | Server → Client | Updates on agent progress |
+| `agent_complete` | Server → Client | Indicates when an agent finishes |
+| `vulnerability_detected` | Server → Client | Real-time vulnerability notifications |
+| `exploit_status` | Server → Client | Updates on PoC generation and execution |
+| `analysis_complete` | Server → Client | Signals the end of the analysis process |
+
+### Usage Example
+
+To analyze a contract using the web frontend:
+
+1. Open the frontend in a web browser (http://localhost:5000)
+2. Upload a contract file or enter a blockchain address
+3. Configure the analysis options (models, RAG, etc.)
+4. Click "Start Analysis"
+5. Watch the real-time analysis process
+6. Explore the detailed results when complete
+
+---
+
+## Benchmarking and Evaluation
+
+AuditAgent includes two powerful benchmarking scripts for evaluating system performance:
+
+### CTFBench Evaluator
+
+The `ctfbench_evaluator.py` script evaluates vulnerability detection performance using the CTFBench methodology:
+
+```bash
+python ctfbench_evaluator.py --models o3-mini claude-3-7-sonnet-latest --rag both
+```
+
+**Key Metrics**:
+- **VDR (Vulnerability Detection Rate)**: Proportion of vulnerabilities correctly identified
+- **OI (Overreporting Index)**: False positives per line of code
+
+#### Command Options
+
+| Option                  | Description                                           |
+|-------------------------|-------------------------------------------------------|
+| `--uploads-dir`         | Directory containing generated reports                |
+| `--benchmark-data-dir`  | Directory containing benchmark data                   |
+| `--results-dir`         | Directory to save evaluation results                  |
+| `--report-dirs`         | Specific report directories to evaluate               |
+| `--use-llm`/`--no-llm`  | Enable/disable LLM-based evaluation                   |
+| `--eval-model`          | LLM model to use for evaluation                       |
+| `--eval-runs`           | Number of independent trials for evaluation           |
+| `--load-results`        | Path to existing results file to visualize            |
+
+### Exploit Success Evaluator
+
+The `exploit_success_evaluator.py` script measures the system's ability to generate and execute working exploits:
+
+```bash
+python exploit_success_evaluator.py --models o3-mini claude-3-7-sonnet-latest --rag both
+```
+
+**Key Metrics**:
+- **Detection Rate**: Percentage of vulnerabilities detected
+- **Generation Rate**: Percentage of detected vulnerabilities with generated exploits
+- **Success Rate**: Percentage of generated exploits that execute successfully
+- **Overall Success Rate**: Percentage of contracts with successful exploits
+
+#### Command Options
+
+| Option                  | Description                                           |
+|-------------------------|-------------------------------------------------------|
+| `--benchmark-data-dir`  | Directory containing benchmark data                   |
+| `--results-dir`         | Directory to save evaluation results                  |
+| `--max-workers`         | Maximum number of parallel workers                    |
+| `--categories`          | Specific vulnerability categories to evaluate         |
+| `--models`              | Models to evaluate                                    |
+| `--rag`                 | RAG configuration (`on`, `off`, or `both`)            |
+| `--load-results`        | Path to existing results file to visualize            |
+| `--example-contract`    | Run evaluation on a single contract file              |
+
+### Performance Analysis
+
+The system also logs detailed performance metrics for each run, including:
+- Token usage by agent and model
+- Lines of code analyzed
+- Execution time by stage
+
+Performance data is saved to `performance_metrics_<timestamp>.json` files, which can be found in the `performance_analysis/` directory.
 
 ---
 
@@ -463,35 +660,28 @@ This loop helps overcome common LLM generation errors (syntax issues, incorrect 
 
 ## Troubleshooting
 
-*   **`Slither analysis failed`:**
-    *   Ensure Slither is correctly installed (`slither --version`).
-    *   Check if the Solidity version used by the contract is installed via `solc-select` (`solc-select install <version>`) and selected (`solc-select use <version>`).
-    *   Verify contract code syntax. Slither needs compilable code.
-    *   If analyzing a project directory, ensure import paths are resolvable or provide necessary remappings (though Slither handles many common ones like OpenZeppelin). Check Slither's documentation for complex project structures.
-*   **`API Key Error` / `AuthenticationError`:**
-    *   Verify your API key is correct in the `.env` file (e.g., `OPENAI_API_KEY="..."`).
-    *   Ensure the `.env` file is in the project's root directory.
-    *   Make sure you have activated the virtual environment (`source .venv/bin/activate`).
-    *   Check if the correct environment variable name is used for your LLM provider (e.g., `ANTHROPIC_API_KEY`).
-*   **`Foundry command not found` / `forge: command not found`:**
-    *   Ensure Foundry is installed correctly and its binaries (`forge`, `cast`, etc.) are in your system's PATH. Run `foundryup` again if needed.
-    *   Verify you are running the script from the project root directory. The `ExploitRunner` executes `forge` within the `exploit/` subdirectory.
-*   **PoC Tests Fail (`Execution: FAILED`):**
-    *   Check the error message printed in the console output or the Markdown/JSON report.
-    *   Examine the generated PoC file in `exploit/src/test/`. Common issues include:
-        *   Incorrect contract addresses or setup in the `setUp()` function.
-        *   Insufficient ETH dealt to the attacker contract (`vm.deal`).
-        *   Logical errors in the `testExploit()` function sequence.
-        *   Compatibility issues if the LLM generated code for a different Solidity/Foundry version.
-    *   Try increasing `--max-retries` if it fails after the default attempts.
-*   **RAG Errors / Pinecone Issues:**
-    *   Ensure `PINECONE_API_KEY` and `PINECONE_ENV` are correct in `.env`.
-    *   Verify the Pinecone index exists and has the correct dimensions (usually 1536 for OpenAI embeddings).
-    *   Check network connectivity to Pinecone.
-    *   Run with `--no-rag` to bypass the knowledge base if Pinecone setup is problematic.
-*   **Slow Performance / High Token Usage:**
-    *   Consider using smaller/faster models (like `o3-mini`, `claude-3-haiku`) for some agents, especially the Skeptic or Exploiter.
-    *   Use `--skip-poc` if you only need the analysis and exploit plan.
-    *   Check the `performance_metrics_...json` file to see which agents/models consume the most tokens/time.
+### Common Issues
 
-```
+| Issue                       | Solution                                                                                       |
+|-----------------------------|------------------------------------------------------------------------------------------------|
+| Slither analysis failed     | Ensure correct Solidity version is installed and selected via `solc-select`                    |
+| API Key Error               | Verify API key in `.env` file and check correct environment variable name                       |
+| Foundry command not found   | Ensure Foundry is installed correctly and run `foundryup`                                      |
+| PoC tests fail              | Check error messages, examine PoC file, try increasing `--max-retries`                         |
+| RAG errors                  | Verify Pinecone credentials or use `--no-rag` to bypass                                        |
+| Slow performance            | Use faster models (e.g., `o3-mini`) or `--skip-poc` to avoid generation                         |
+
+### Optimizing Performance
+
+1. **Model Selection**: Use smaller models (like `o3-mini`) for faster analysis
+2. **RAG Usage**: Disable RAG with `--no-rag` if not needed
+3. **PoC Generation**: Use `--skip-poc` if you only need vulnerability analysis
+4. **Selective Agents**: Configure minimal agents needed for your specific use case
+
+### Resource Monitoring
+
+The system tracks token usage and performance metrics for each run:
+
+1. Check `performance_metrics_<timestamp>.json` files
+2. Review token usage by agent to optimize model selection
+3. Monitor execution time by stage to identify bottlenecks
