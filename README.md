@@ -522,7 +522,7 @@ The system uses WebSocket for real-time updates:
 
 To analyze a contract using the web frontend:
 
-1. Open the frontend in a web browser (http://localhost:5000)
+1. Open the frontend in a web browser
 2. Upload a contract file or enter a blockchain address
 3. Configure the analysis options (models, RAG, etc.)
 4. Click "Start Analysis"
