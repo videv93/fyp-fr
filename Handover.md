@@ -7,9 +7,10 @@
 3. [Setup and Installation](#setup-and-installation)
 4. [Configuration Options](#configuration-options)
 5. [Running Analyses](#running-analyses)
-6. [Benchmarking and Evaluation](#benchmarking-and-evaluation)
-7. [Understanding Results](#understanding-results)
-8. [Troubleshooting](#troubleshooting)
+6. [Web Frontend](#web-frontend)
+7. [Benchmarking and Evaluation](#benchmarking-and-evaluation)
+8. [Understanding Results](#understanding-results)
+9. [Troubleshooting](#troubleshooting)
 
 ## System Overview
 
@@ -32,6 +33,7 @@ The system combines static analysis tools (Slither) with a pipeline of specializ
 - **Self-Correcting Execution**: Automatically runs and fixes generated exploit code
 - **Flexible LLM Configuration**: Supports various models (OpenAI, Anthropic, etc.) with per-agent configuration
 - **Comprehensive Benchmarking**: Tools to evaluate vulnerability detection and exploit generation performance
+- **Web-Based User Interface**: Interactive frontend for visualization of analysis process and results
 
 ## Architecture and Components
 
@@ -63,16 +65,25 @@ graph TB
         foundry["Foundry (PoC Execution)"]
     end
 
+    subgraph "Web Frontend"
+        ui["React UI"]
+        api["Flask API"]
+        socket["WebSocket Events"]
+        visualizer["Process Visualizer"]
+    end
+
     subgraph "Output Formats"
         console["Console Output"]
         md["Markdown Report"]
         json["JSON Export"]
         pocs["PoC Contracts"]
+        dashboard["Interactive Dashboard"]
     end
 
     local --> static
     multi --> static
     blockchain --> static
+    ui --> api
 
     static --> context
     context --> analyzer
@@ -84,20 +95,39 @@ graph TB
     runner --> foundry
     foundry --> runner
 
+    ui --> visualizer
+    api --> socket
+    socket --> visualizer
+
     runner --> console
     runner --> md
     runner --> json
     runner --> pocs
+    
+    api --> local
+    api --> multi
+    api --> blockchain
+    
+    context --> socket
+    analyzer --> socket
+    skeptic --> socket
+    exploiter --> socket
+    generator --> socket
+    runner --> socket
+    
+    socket --> dashboard
 
     classDef primary fill:#d1e7dd,stroke:#000
     classDef secondary fill:#cff4fc,stroke:#000
     classDef agent fill:#fff3cd,stroke:#000
     classDef output fill:#f8d7da,stroke:#000
+    classDef frontend fill:#e0cffc,stroke:#000
 
     class local,multi,blockchain primary
     class static,rag,foundry secondary
     class context,analyzer,skeptic,exploiter,generator,runner agent
     class console,md,json,pocs output
+    class ui,api,socket,visualizer,dashboard frontend
 ```
 
 ### Agent Pipeline
@@ -341,6 +371,154 @@ python main.py \
 python main.py --export-md --export-json results.json --contract examples/VulnerableLendingContract.sol
 ```
 
+## Web Frontend
+
+AuditAgent includes a web-based frontend interface that provides a user-friendly way to interact with the system, visualize the analysis process, and explore results.
+
+### Setup and Installation
+
+To set up the web frontend:
+
+1. **Navigate to the frontend directory**:
+   ```bash
+   cd frontend_poc
+   ```
+
+2. **Install backend dependencies**:
+   ```bash
+   pip install flask flask-socketio flask-cors
+   ```
+
+3. **Start the backend server**:
+   ```bash
+   python app.py
+   ```
+
+4. **Install frontend dependencies** (in a separate terminal):
+   ```bash
+   cd frontend_poc/client
+   npm install
+   ```
+
+5. **Start the development server**:
+   ```bash
+   npm start
+   ```
+   
+   Or use the pre-built version:
+   ```bash
+   # The backend will serve the pre-built frontend from the client/build directory
+   # Just run app.py and navigate to http://localhost:5000
+   ```
+
+### Key Features
+
+The web frontend provides several advantages over the command-line interface:
+
+1. **Interactive Contract Input**:
+   - Upload local Solidity files through drag-and-drop
+   - Fetch contracts directly from blockchain by address
+   - Support for multi-file project uploads
+
+2. **Customizable Analysis Configuration**:
+   - Select different LLM models for each agent
+   - Toggle RAG functionality
+   - Configure PoC generation and execution settings
+
+3. **Real-Time Process Visualization**:
+   - Live agent activity indicators
+   - Step-by-step workflow visualization
+   - Progress tracking for each analysis stage
+
+4. **Enhanced Results Exploration**:
+   - Interactive vulnerability cards with expandable details
+   - Syntax-highlighted code with vulnerability locations
+   - Collapsible exploit plans and PoC code
+   - Execution status indicators for generated exploits
+
+5. **Project Context Insights** (for multi-contract projects):
+   - Contract relationship visualization
+   - Cross-contract vulnerability highlighting
+   - Statistics and recommendations for complex projects
+
+### Architecture
+
+The frontend system consists of:
+
+```
+frontend_poc/
+├── app.py                 # Flask backend server
+└── client/                # React frontend application
+    ├── src/
+    │   ├── components/    # UI components
+    │   ├── services/      # API and WebSocket services
+    │   ├── pages/         # Main application pages
+    │   ├── context/       # React context providers
+    │   └── visualizer/    # Agent workflow visualization
+    └── build/             # Pre-built frontend files
+```
+
+The architecture follows a client-server model:
+
+1. **Backend** (Flask + Flask-SocketIO):
+   - Interfaces with the core AuditAgent system
+   - Provides RESTful API endpoints
+   - Implements real-time communication with WebSockets
+   - Manages analysis jobs and their states
+
+2. **Frontend** (React):
+   - Responsive user interface built with React and Tailwind CSS
+   - Real-time updates using Socket.io client
+   - Interactive visualization with React Flow
+   - Code highlighting with Prism.js
+
+### API Endpoints
+
+The frontend server exposes several API endpoints:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/upload-contract` | POST | Upload a Solidity file or project |
+| `/api/fetch-contract` | POST | Fetch contract from blockchain by address |
+| `/api/analyze` | POST | Start analysis with specified options |
+| `/api/status/:jobId` | GET | Get analysis status for a specific job |
+| `/api/results/:jobId` | GET | Get complete analysis results |
+| `/api/performance/:jobId` | GET | Get performance metrics for an analysis |
+
+### WebSocket Events
+
+The system uses WebSocket for real-time updates:
+
+| Event | Direction | Description |
+|-------|-----------|-------------|
+| `agent_active` | Server → Client | Notifies when an agent starts working |
+| `agent_status` | Server → Client | Updates on agent progress |
+| `agent_complete` | Server → Client | Indicates when an agent finishes |
+| `vulnerability_detected` | Server → Client | Real-time vulnerability notifications |
+| `exploit_status` | Server → Client | Updates on PoC generation and execution |
+| `analysis_complete` | Server → Client | Signals the end of the analysis process |
+
+### Integration with Core System
+
+The frontend integration uses a specialized `SocketIOAgentCoordinator` class that extends the core system's functionality to:
+
+1. Emit real-time events during the analysis process
+2. Track the status of each agent separately
+3. Provide granular control over the analysis workflow
+4. Format results for frontend visualization
+5. Generate frontend-specific performance metrics
+
+### Usage Example
+
+To analyze a contract using the web frontend:
+
+1. Open the frontend in a web browser
+2. Upload a contract file or enter a blockchain address
+3. Configure the analysis options (models, RAG, etc.)
+4. Click "Start Analysis"
+5. Watch the real-time analysis process
+6. Explore the detailed results when complete
+
 ## Benchmarking and Evaluation
 
 AuditAgent includes two powerful benchmarking scripts for evaluating system performance:
@@ -356,10 +534,6 @@ python ctfbench_evaluator.py --models o3-mini claude-3-7-sonnet-latest --rag bot
 **Key Metrics**:
 - **VDR (Vulnerability Detection Rate)**: Proportion of vulnerabilities correctly identified
 - **OI (Overreporting Index)**: False positives per line of code
-
-**Visualization Example**:
-
-![CTFBench VDR-OI Space](https://github.com/user-attachments/assets/2c254dff-7c6e-4dc9-b70d-206f3e778e51)
 
 #### Command Options
 
@@ -387,10 +561,6 @@ python exploit_success_evaluator.py --models o3-mini claude-3-7-sonnet-latest --
 - **Generation Rate**: Percentage of detected vulnerabilities with generated exploits
 - **Success Rate**: Percentage of generated exploits that execute successfully
 - **Overall Success Rate**: Percentage of contracts with successful exploits
-
-**Visualization Example**:
-
-![Exploit Funnel](https://github.com/user-attachments/assets/48be7de8-8693-49b3-911e-4f032042b77c)
 
 #### Command Options
 
