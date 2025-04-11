@@ -1,73 +1,105 @@
-# Generate Vulnerable Transaction Sequences for Smart Contract using Large Language Models
+# FYP: Generate Vulnerable Transaction Sequences for Smart Contract using Large Language Models
 
-This project utilises a multi-agent workflow to identify vulnerabilities and generate transactions to exploit them. 
+# AuditAgent: LLM-Powered Smart Contract Vulnerability Analysis & Exploit Generation
 
-| Section                                 | Description                                                                                     |
-|-----------------------------------------|-------------------------------------------------------------------------------------------------|
-| [Introduction](#generate-vulnerable-transaction-sequences-for-smart-contract-using-large-language-models) | Project overview and key features                                                                 |
-| [How it looks via web GUI](#how-it-looks-via-web-gui)       | Visual representation of the web GUI                                                              |
-| [How it looks on CLI](#how-it-looks-on-cli)                  | Visual representation of the CLI output                                                            |
-| [Features](#features)                    | Key features of the system                                                                        |
-| [Architecture](#architecture)            | Detailed architecture of the system including the multi-agent pipeline and RAG system integration  |
-| [Key Features](#key-features)             | Additional key features of the system                                                             |
-| [Prerequisites](#prerequisites)           | System requirements and setup prerequisites                                                       |
-| [Installation](#installation)             | Step-by-step instructions to install and configure the system                                     |
-| [Usage](#usage)                           | How to use the system, including contract preparation and execution                                |
-| [Automatic PoC Execution and Fixing](#automatic-poc-execution-and-fixing) | Features related to automatic proof-of-concept execution and error correction                       |
-| [Troubleshooting Common Issues](#troubleshooting-common-issues) | How to resolve common problems encountered during execution                                        |
+**AuditAgent** is an advanced system that leverages a multi-agent Large Language Model (LLM) workflow to automatically analyze smart contracts, identify potential vulnerabilities, and generate proof-of-concept (PoC) exploit code. It integrates static analysis, Retrieval-Augmented Generation (RAG), and a pipeline of specialized AI agents to provide deep security insights.
 
+| Section                                         | Description                                                                     |
+| :---------------------------------------------- | :------------------------------------------------------------------------------ |
+| [Introduction](#auditagentauditagentauditagentauditagentauditagentauditagentauditagentauditagentauditagentauditagentauditagentauditagentauditagentauditagentauditagentauditagentauditagentauditagentauditagent-llm-powered-smart-contract-vulnerability-analysis--exploit-generation) | Project overview and goals.                                                     |
+| [Visual Showcase](#visual-showcase)             | See AuditAgent in action (GUI & CLI).                                           |
+| [How It Works](#how-it-works)                   | High-level explanation of the analysis workflow.                                |
+| [Core Features](#core-features)                 | Key capabilities of the system.                                                 |
+| [Architecture Deep Dive](#architecture-deep-dive) | Detailed system architecture and agent roles.                                   |
+| [Prerequisites](#prerequisites)                 | Software and keys needed before installation.                                   |
+| [Installation & Setup](#installation--setup)    | Step-by-step guide to get the system running.                                   |
+| [Running an Analysis](#running-an-analysis)     | How to use the CLI to analyze contracts.                                        |
+| [Command-Line Flags Explained](#command-line-flags-explained) | Detailed breakdown of all available options.                          |
+| [Understanding the Output](#understanding-the-output) | What files are created and how to interpret the results.                      |
+| [Automatic PoC Execution & Fixing](#automatic-poc-execution--fixing) | Details on the automated exploit testing and self-correction feature.         |
+| [Troubleshooting](#troubleshooting)             | Solutions for common setup and execution issues.                                |
 
+---
 
+## Visual Showcase
 
-### How it looks via web GUI
+### Web GUI (Example Interface)
+
+*Note: The core logic runs via CLI; a GUI might be built separately.*
+
 ![image](https://github.com/user-attachments/assets/eac050fa-2856-4f30-80f6-06192db41b4c)
+*(Example: Contract input)*
+
 ![image](https://github.com/user-attachments/assets/2c254dff-7c6e-4dc9-b70d-206f3e778e51)
+*(Example: Analysis results)*
+
 ![image](https://github.com/user-attachments/assets/e2656cd4-0fa3-4d70-a8cd-550850c5daba)
+*(Example: Vulnerability details)*
+
 ![image](https://github.com/user-attachments/assets/48be7de8-8693-49b3-911e-4f032042b77c)
+*(Example: Generated PoC)*
 
+### Command-Line Interface (CLI) Output
 
-### How it looks on CLI!
+AuditAgent provides rich, real-time feedback directly in your terminal:
+
 https://github.com/user-attachments/assets/8360a8b6-4ca0-49d3-be3c-94c195b3c5a3
 
+---
 
-## Features
+## How It Works
 
-- **Static Analysis**: Utilizes Slither to parse and analyze Solidity contracts, extracting function details and generating call graphs.
-- **Knowledge Base**: Stores vulnerability information using FAISS for efficient similarity searches, enabling contextual analysis.
-- **LLM Integration**: Supports multiple LLM providers (OpenAI, Anthropic, Ollama) with automatic prompt format optimization.
-- **Agent Coordination**: Coordinates between analysis agents to provide comprehensive vulnerability assessments and exploit recommendations.
-- **Model Flexibility**: Configure different models for each agent based on task complexity and performance requirements.
-- **Project Context Analysis**: Employs an LLM-powered agent to analyze inter-contract relationships and provide contextual insights for vulnerability detection.
-- **Multi-Contract Analysis**: Supports the analysis of multiple contracts within a project, identifying potential vulnerabilities arising from their interactions.
+AuditAgent follows a sophisticated pipeline to analyze smart contracts:
 
-## Architecture
+1.  **Input:** You provide a Solidity smart contract file, a directory of contracts, or a contract address on a supported blockchain.
+2.  **Static Analysis:** The system uses **Slither** to parse the contract(s), understand the code structure, identify function calls, and perform initial checks based on predefined patterns. If analyzing a multi-file project, it identifies inter-contract relationships.
+3.  **LLM-Powered Analysis (Multi-Agent Pipeline):**
+    *   **(Optional) Project Context:** If multiple contracts are involved, the `ProjectContextLLMAgent` analyzes interactions between them.
+    *   **Vulnerability Identification (`AnalyzerAgent`):** This agent analyzes the code, leveraging static analysis results and (optionally) a **RAG** system (Pinecone Vector DB) containing known vulnerability patterns to identify potential weaknesses.
+    *   **Validation (`SkepticAgent`):** To minimize false positives, this agent critically reviews the initial findings, assessing exploitability and business logic context.
+    *   **Exploit Planning (`ExploiterAgent`):** For high-confidence vulnerabilities, this agent devises a step-by-step plan to exploit the weakness.
+    *   **PoC Generation (`GeneratorAgent`):** Translates the exploit plan into a runnable **Foundry** test contract (Proof of Concept).
+    *   **Execution & Fixing (`ExploitRunner`):** Automatically runs the generated PoC using Foundry. If the test fails, it attempts to **fix the exploit code** using the LLM and retries (up to a configurable limit).
+4.  **Output:** The system reports the validated vulnerabilities, generated PoC code, execution results (success/failure, fix attempts), and optionally generates Markdown/JSON reports.
 
-The project implements a multi-agent system for smart contract vulnerability detection and exploit generation, utilizing Retrieval-Augmented Generation (RAG) and a coordinated pipeline of specialized agents. Here's how the system works:
+---
 
-1. **Static Analysis & RAG System**:
-   - Parses Solidity contracts using Slither for initial static analysis
-   - Maintains a knowledge base of known vulnerabilities in Pinecone Vector DB
-   - Uses RAG to enhance vulnerability detection with historical context
+## Core Features
 
-2. **Agent Pipeline**:
-   - **AgentCoordinator**: Orchestrates the multi-agent workflow and manages agent interactions
-   - **ProjectContextLLMAgent**: Analyzes inter-contract relationships and provides contextual insights for vulnerability detection
-   - **Analysis Flow**:
-     1. AnalyzerAgent: Initial vulnerability detection using RAG and LLM analysis
-     2. SkepticAgent: Validates findings to reduce false positives
-     3. ExploiterAgent: Generates exploit strategies for confirmed vulnerabilities
-     4. GeneratorAgent: Creates concrete PoC exploits
-     5. ExploitRunner: Executes and validates the generated exploits
+*   **Multi-Agent LLM Workflow:** Specialized agents collaborate for detection, validation, and exploit generation.
+*   **Static Analysis Integration:** Leverages Slither for robust initial code understanding.
+*   **RAG Enhancement (Optional):** Improves detection by comparing against a knowledge base of known vulnerabilities (via Pinecone).
+*   **Multi-Contract Project Analysis:** Understands and analyzes interactions between multiple contracts in a project.
+*   **Blockchain Integration:** Can fetch and analyze contracts directly from Ethereum, BSC, Base, and Arbitrum.
+*   **Automatic PoC Generation:** Creates Foundry test files demonstrating exploits.
+*   **Self-Correcting PoC Execution:** Automatically runs and attempts to fix generated exploit code.
+*   **Flexible LLM Configuration:** Supports various models (OpenAI, Anthropic, etc.) and allows different models per agent.
+*   **Detailed Reporting:** Provides console output, Markdown reports, and JSON exports.
+*   **Performance Tracking:** Logs token usage and execution time for analysis.
+
+---
+
+## Architecture Deep Dive
+
+The system combines static analysis tools with a chain of LLM agents coordinated by the `AgentCoordinator`.
 
 ```mermaid
 graph TB
+    %% Input
+    input["Contract Source (File/Dir/Address)"] --> main["main.py (CLI)"]
+
     %% Core Components
-    contract["Smart Contract"] --> coord["AgentCoordinator"]
-    
-    subgraph "Knowledge Base"
-        pinecone["Pinecone Vector DB"]
-        vulncat["Vulnerability Categories"]
-        known_vulns["Known Vulnerabilities"]
+    main --> coord["AgentCoordinator"]
+
+    subgraph "Static Analysis"
+        slither["Slither Analyzer"]
+        call_graph["Call Graph Generator"]
+        contract_parser["Contract Parser"]
+    end
+
+    subgraph "Knowledge Base (RAG)"
+        pinecone["Pinecone Vector DB (Optional)"]
+        vuln_db["Known Vulnerabilities DB"]
     end
 
     subgraph "Agent Pipeline"
@@ -77,8 +109,8 @@ graph TB
         skeptic["SkepticAgent"]
         exploiter["ExploiterAgent"]
         generator["GeneratorAgent"]
-        runner["ExploitRunner"]
-        
+        runner["ExploitRunner (w/ Foundry)"]
+
         project_context --> analyzer
         analyzer --> |"Potential Vulns"| skeptic
         skeptic --> |"Validated Vulns"| exploiter
@@ -86,14 +118,19 @@ graph TB
         generator --> |"PoC Code"| runner
     end
 
-    %% RAG System Integration
-    pinecone --> analyzer
-    vulncat --> analyzer
-    known_vulns --> pinecone
+    %% Data Flow
+    main --> contract_parser
+    contract_parser --> slither
+    slither --> call_graph
+    slither --> |"AST, Findings"| coord
 
-    %% Coordinator Flow
     coord --> project_context
+    project_context --> |"Context Insights"| analyzer
     coord --> analyzer
+
+    vuln_db --> pinecone
+    pinecone --> analyzer
+
     coord --> skeptic
     coord --> exploiter
     coord --> generator
@@ -101,168 +138,332 @@ graph TB
 
     %% Model Configuration
     config["ModelConfig"] --> coord
-    
+
     %% External Services
     subgraph "LLM Services"
-        openai["OpenAI API"]
+        llm_api["LLM API (OpenAI, Anthropic, etc.)"]
     end
-    
-    analyzer --> openai
-    skeptic --> openai
-    exploiter --> openai
-    generator --> openai
+
+    analyzer --> llm_api
+    skeptic --> llm_api
+    exploiter --> llm_api
+    generator --> llm_api
+    runner --> |"Fix Request"| llm_api
+    project_context --> llm_api
 
     %% Output
     runner --> |"Execution Results"| coord
-    coord --> |"Final Report"| output["Vulnerability Report"]
+    coord --> |"Final Report"| output["Console Output / Files"]
 
-    style coord fill:#e6b3ff,stroke:#000,stroke-width:2px,color:#000
-    style analyzer fill:#b3d9ff,stroke:#000,color:#000
-    style skeptic fill:#b3d9ff,stroke:#000,color:#000
-    style exploiter fill:#b3d9ff,stroke:#000,color:#000
-    style generator fill:#b3d9ff,stroke:#000,color:#000
-    style runner fill:#b3d9ff,stroke:#000,color:#000
-    style project_context fill:#b3d9ff,stroke:#000,color:#000
-    style contract fill:#d9f2d9,stroke:#000,color:#000
-    style output fill:#ffe6cc,stroke:#000,color:#000
-    style config fill:#ffcccc,stroke:#000,color:#000
-    
-    style pinecone fill:#ffecb3,stroke:#000,color:#000
-    style vulncat fill:#ffecb3,stroke:#000,color:#000
-    style known_vulns fill:#ffecb3,stroke:#000,color:#000
-    style openai fill:#e6ffcc,stroke:#000,color:#000
+    %% Styling
+    style main fill:#cde4ff,stroke:#000
+    style coord fill:#e6b3ff,stroke:#000
+    style input fill:#d9ead3,stroke:#000
+    style output fill:#fff2cc,stroke:#000
+    style slither fill:#fce5cd,stroke:#000
+    style call_graph fill:#fce5cd,stroke:#000
+    style contract_parser fill:#fce5cd,stroke:#000
+    style pinecone fill:#d9d2e9,stroke:#000
+    style vuln_db fill:#d9d2e9,stroke:#000
+    style analyzer fill:#b3d9ff,stroke:#000
+    style skeptic fill:#b3d9ff,stroke:#000
+    style exploiter fill:#b3d9ff,stroke:#000
+    style generator fill:#b3d9ff,stroke:#000
+    style runner fill:#b3d9ff,stroke:#000
+    style project_context fill:#b3d9ff,stroke:#000
+    style llm_api fill:#d0e0e3,stroke:#000
+    style config fill:#f4cccc,stroke:#000
 ```
 
-3. **Key Features**:
-   - **Configurable Models**: Each agent can use different LLM models based on task requirements
-   - **RAG Enhancement**: Uses similar historical vulnerabilities to improve detection accuracy
-   - **Progressive Validation**: Multi-stage verification process reduces false positives
-   - **Automated Exploitation**: Generates and validates concrete exploit code
+*   **Static Analysis:** `slither-analyzer` parses the code, identifies structure, and runs basic detectors.
+*   **RAG System:** If enabled (`--no-rag` not used), the `AnalyzerAgent` queries Pinecone (populated with `known_vulnerabilities/contract_vulns.json`) for similar known issues to improve context.
+*   **Agent Pipeline:** The `AgentCoordinator` passes the contract info and context through the specialized agents (`Analyzer`, `Skeptic`, `Exploiter`, `Generator`, `Runner`). Each agent uses LLMs via the configured `ModelConfig`.
+*   **Foundry Integration:** The `ExploitRunner` uses `forge test` to execute the generated PoC `.sol` files located in the `exploit/` directory.
+
+---
 
 ## Prerequisites
 
-- Python 3.8+
-- Solidity Compiler (for Slither)
-- OpenAI API Key
-- [Slither](https://github.com/crytic/slither) installed
+Before you begin, ensure you have the following installed and configured:
 
-## Installation
+1.  **Python:** Version 3.8 or higher.
+2.  **pip:** Python package installer.
+3.  **Git:** For cloning the repository.
+4.  **Solidity Compiler & Version Manager (`solc-select`):** Required by Slither to compile contracts. Install it via pip:
+    ```bash
+    pip install solc-select
+    solc-select install 0.8.0 # Or other versions needed by contracts
+    solc-select use 0.8.0   # Set a default version
+    ```
+5.  **Slither:** Smart contract static analyzer. Follow the official [Slither installation guide](https://github.com/crytic/slither#installation). Often requires Node.js/npm for certain dependencies. Like the OpenZeppelin contracts
+6.  **Foundry:** Fast, portable, and modular toolkit for Ethereum application development (used for PoC execution). Install via:
+    ```bash
+    curl -L https://foundry.paradigm.xyz | bash
+    foundryup
+    ```
+    Verify installation: `forge --version`
+7.  **API Keys:**
+    *   **LLM Provider:** At least one API key (e.g., OpenAI, Anthropic) saved in your environment. See [Installation](#set-up-environment-variables).
+    *   **(Optional) Blockchain Explorer:** API keys for Etherscan, BscScan, BaseScan, ArbiScan if using the `--contract-address` feature. Add these to your `.env` file (e.g., `ETHERSCAN_API_KEY=YourKey`).
+    *   **(Optional) Pinecone:** API key and environment name if using the RAG feature with Pinecone. Add `PINECONE_API_KEY` and `PINECONE_ENV` to your `.env` file.
 
-1. **Clone the Repository**
+---
 
-   ```bash
-   git clone https://github.com/your-username/llm_agents.git
-   cd llm_agents
-   ```
+## Installation & Setup
 
-2. **Create a Virtual Environment**
-
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
-
-3. **Install Dependencies**
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Set up Slither**
-
-   Follow the [Slither installation guide](https://github.com/crytic/slither#installation) to install Slither and its dependencies.
-
-5. **Set Up Environment Variables**
-
-   Create a `.env` file in the project root and add your OpenAI API key:
-
-   ```env
-   OPENAI_API_KEY=your_openai_api_key_here
-   ```
-
-   Alternatively, export it directly in your shell:
-
-   ```bash
-   export OPENAI_API_KEY=your_openai_api_key_here
-   ```
-
-## Usage
-
-1. **Prepare Solidity Contracts**
-
-   Place your Solidity contracts in the `static_analysis/test_contracts/` directory. Sample contracts are provided for testing purposes.
-
-2. **Set your Solidity Compiler Version**
-
-    Based on the Solidity version used in your contracts, install the corresponding compiler version using `solc-select`:
-
-    ```python
-    solc-select install 0.8.0
-    solc-select use 0.8.0
+1.  **Clone the Repository:**
+    ```bash
+    git clone https://github.com/your-username/AuditAgent.git # Replace with your repo URL
+    cd AuditAgent
     ```
 
-3. **Run the Analysis**
+2.  **Initialize Foundry Project & Submodules:**
+    The generated exploits rely on Foundry's standard library (`forge-std`). Initialize the `exploit` directory as a Foundry project and pull the necessary submodule:
+    ```bash
+    cd exploit
+    forge init --no-git # Initialize Foundry without creating a new git repo
+    git submodule update --init --recursive # Pull forge-std defined in .gitmodules
+    cd ..
+    ```
+    *(Note: If `forge init` complains about an existing directory, you might need to remove the `exploit/lib` directory first if it exists.)*
 
-   Execute the main script to perform static analysis and vulnerability assessment:
+3.  **Create Python Virtual Environment:**
+    ```bash
+    python3 -m venv .venv
+    source .venv/bin/activate # On Windows use `.venv\Scripts\activate`
+    ```
 
-   Basic usage with default models (o1-mini):
-   ```bash
-   python main.py --contract path/to/your/contract.sol
-   ```
+4.  **Install Python Dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-   Configure which models to use for each agent:
-   ```bash
-   # Use the same model for all agents
-   python main.py --all-models gpt-4o --contract path/to/your/contract.sol
+5.  **Set Up Environment Variables:**
+    Create a `.env` file in the project root directory (`AuditAgent/`). Add your API keys:
+    ```dotenv
+    # --- LLM Keys ---
+    OPENAI_API_KEY="sk-YourOpenAIKeyHere"
+    # ANTHROPIC_API_KEY="YourAnthropicKeyHere" # If using Claude models
+    # DEEPSEEK_API_KEY="YourDeepSeekKeyHere" # If using DeepSeek models
 
-   # Configure individual agents with different models
-   python main.py \
-     --analyzer-model gpt-4o \
-     --skeptic-model gpt-3.5-turbo \
-     --exploiter-model claude-3-haiku-20240307 \
-     --generator-model o1-preview \
-     --contract path/to/your/contract.sol
+    # --- Blockchain Explorer Keys (Optional - for fetching contracts) ---
+    # ETHERSCAN_API_KEY="YourEtherscanKeyHere"
+    # BSCSCAN_API_KEY="YourBscScanKeyHere"
+    # BASESCAN_API_KEY="YourBaseScanKeyHere"
+    # ARBISCAN_API_KEY="YourArbiScanKeyHere"
 
-   # Configure API base URL (useful for proxies)
-   python main.py --api-base https://your-proxy.com/v1 --all-models gpt-4
-   ```
+    # --- Pinecone Key (Optional - for RAG) ---
+    # PINECONE_API_KEY="YourPineconeKeyHere"
+    # PINECONE_ENV="YourPineconeEnvironmentHere" # e.g., us-west1-gcp
+    ```
+    *Only include keys for the services you intend to use.*
 
-   Auto-run execution options:
-   ```bash
-   # Disable automatic execution of PoCs
-   python main.py --no-auto-run --contract path/to/your/contract.sol
+6.  **Initialize Pinecone Index (Optional - for RAG):**
+    If you plan to use the RAG feature (`--no-rag` is *not* specified), you need to populate the Pinecone index. This typically involves running a separate script (check `rag/doc_db.py` or similar) to process the `known_vulnerabilities/contract_vulns.json` file and upload embeddings. Ensure your `.env` file has `PINECONE_API_KEY` and `PINECONE_ENV`. The system might attempt to create the index (`fyp` by default) if it doesn't exist when first run with RAG enabled.
 
-   # Set maximum number of fix attempts for failing tests
-   python main.py --max-retries 5 --contract path/to/your/contract.sol
-   ```
+7.  **Verify Installations:**
+    *   `python --version`
+    *   `pip --version`
+    *   `slither --version`
+    *   `forge --version`
+    *   `solc-select use 0.8.0` (or your desired version)
+    *   `solc --version`
 
-   The script will:
+---
 
-   - Parse the Solidity contract using Slither.
-   - Extract function details and generate a call graph.
-   - Analyze the contract against the knowledge base for known vulnerabilities.
-   - Use LLM agents to generate a comprehensive vulnerability report and exploit plan.
+## Running an Analysis
 
-4. **View Results**
+Execute the main script from the project's root directory (`AuditAgent/`).
 
-   The analysis results will be printed to the console, detailing detected vulnerabilities, confidence scores, reasoning, and suggested exploit transactions.
+**1. Analyzing a Local Contract File:**
 
-## Automatic PoC Execution and Fixing
+```bash
+python main.py --contract examples/VulnerableLendingContract.sol
+```
 
-The system includes a self-correction mechanism for generated proof-of-concept exploits:
+**2. Analyzing a Local Multi-File Project Directory:**
 
-### Features
-- **Auto-run**: Automatically executes generated PoC tests after creation
-- **Error Detection**: Intelligently identifies and extracts error information from test failures
-- **Self-correction**: Uses the same LLM to fix broken test code based on error messages
-- **Multiple Retries**: Attempts up to 3 fixes by default (configurable with `--max-retries`)
-- **Detailed Reporting**: Reports execution status, error messages, and fix attempts
+Provide the path to the directory containing your `.sol` files. AuditAgent will use Slither to analyze the project structure and the `ProjectContextLLMAgent` to understand inter-contract relationships.
 
-### Troubleshooting Common Issues
-The system automatically addresses common errors in generated tests:
-- Missing funds for transactions (adding vm.deal statements)
-- Incorrect function calls or parameters
-- Arithmetic errors like overflow/underflow
-- State inconsistencies across transactions
-- Solidity version compatibility issues
-- Import errors and contract initialization problems
+```bash
+# Assumes MyProject/ contains ContractA.sol, ContractB.sol, IContract.sol etc.
+python main.py --contract path/to/MyProject/
+```
+*The system will attempt to identify a primary contract file within the directory for context but analyzes all files for interactions.*
+
+**3. Fetching and Analyzing a Contract from Blockchain:**
+
+```bash
+# Analyze a contract on Ethereum mainnet
+python main.py --contract-address 0xYourContractAddressHere --network ethereum
+
+# Analyze on Base and save preserve project structure for Project Context Agent (if multi-file source)
+python main.py --contract-address 0xAnotherAddressHere --network base --save-separate
+```
+*Requires the relevant Blockchain Explorer API key in your `.env` file.*
+
+**4. Using Specific Models:**
+
+```bash
+# Use GPT-4o for all agents
+python main.py --all-models o3-mini --contract benchmark_data/contracts/with_errors/access_control/Voting.sol
+
+# Use different models for different agents
+python main.py \
+  --analyzer-model claude-3-7-sonnet-latest \
+  --skeptic-model o3-mini \
+  --generator-model claude-3-7-sonnet-latest \
+  --contract benchmark_data/contracts/with_errors/access_control/Voting.sol
+```
+
+**5. Controlling PoC Generation and Execution:**
+
+```bash
+# Analyze but don't generate PoC code (stops after exploit plan)
+python main.py --skip-poc --contract examples/VulnerableLendingContract.sol
+
+# Generate PoC but don't run it automatically
+python main.py --no-auto-run --contract examples/VulnerableLendingContract.sol
+
+# Generate and run, allow more fix attempts if it fails
+python main.py --max-retries 5 --contract examples/VulnerableLendingContract.sol
+```
+
+**6. Disabling RAG:**
+
+If you don't have Pinecone set up or want to analyze without the knowledge base:
+
+```bash
+python main.py --no-rag --contract examples/VulnerableLendingContract.sol
+```
+
+**7. Exporting Results:**
+
+```bash
+# Export a Markdown report
+python main.py --export-md --contract examples/VulnerableLendingContract.sol
+
+# Export results to a specific JSON file
+python main.py --export-json analysis_results.json --contract examples/VulnerableLendingContract.sol
+```
+
+---
+
+## Command-Line Flags Explained
+
+| Flag                    | Argument Type          | Default                               | Description                                                                                                                               |
+| :---------------------- | :--------------------- | :------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------- |
+| `--contract`            | `path`                 | `examples/VulnerableLendingContract.sol` | Path to the local Solidity file **or** directory containing the project to analyze.                                                       |
+| `--contract-address`    | `string`               | None                                  | Fetches contract source code from the specified blockchain address. Use with `--network`. Overrides `--contract` if both are provided. |
+| `--network`             | `string`               | `ethereum`                            | Blockchain network to use when fetching (`ethereum`, `bsc`, `base`, `arbitrum`).                                                          |
+| `--save-separate`       | (flag)                 | False                                 | When fetching a multi-file contract (`--contract-address`), also save the individual `.sol` files to a `_contracts` subdirectory.      |
+| `--analyzer-model`      | `string`               | `o3-mini`                             | LLM model name for the AnalyzerAgent.                                                                                                     |
+| `--skeptic-model`       | `string`               | `o3-mini`                             | LLM model name for the SkepticAgent.                                                                                                      |
+| `--exploiter-model`     | `string`               | `o3-mini`                             | LLM model name for the ExploiterAgent.                                                                                                    |
+| `--generator-model`     | `string`               | `o3-mini`                             | LLM model name for the GeneratorAgent (and for fixing PoCs).                                                                              |
+| `--context-model`       | `string`               | `o3-mini`                             | LLM model name for the ProjectContextLLMAgent.                                                                                            |
+| `--all-models`          | `string`               | None                                  | Use this specified LLM model for *all* agents, overriding individual settings.                                                            |
+| `--api-base`            | `url`                  | None                                  | Custom base URL for the LLM API (e.g., for proxies or local models compatible with OpenAI API spec).                                        |
+| `--no-rag`              | (flag)                 | False                                 | Disable Retrieval-Augmented Generation. The AnalyzerAgent will not query the Pinecone knowledge base.                                     |
+| `--skip-poc`            | (flag)                 | False                                 | Stop the analysis after the `ExploiterAgent` generates the plan. Do not generate or run PoC code.                                          |
+| `--no-auto-run`         | (flag)                 | False                                 | Generate PoC code but do not automatically execute it using Foundry.                                                                      |
+| `--max-retries`         | `integer`              | `3`                                   | Maximum number of times the `ExploitRunner` will attempt to fix a failing PoC test using the LLM.                                          |
+| `--export-md`           | (flag)                 | False                                 | Generate a detailed analysis report in Markdown format in the root directory.                                                              |
+| `--export-json`         | `path`                 | None                                  | Export detailed analysis results (vulnerabilities, PoCs, execution status) to the specified JSON file path.                                |
+
+---
+
+## Understanding the Output
+
+AuditAgent generates several outputs:
+
+1.  **Console Output:**
+    *   Real-time progress updates from each agent.
+    *   Configuration details.
+    *   Static analysis findings summary.
+    *   Detected vulnerabilities with confidence scores and reasoning.
+    *   PoC generation status and file paths.
+    *   PoC execution results (`SUCCESS`/`FAILED`, retries, errors).
+    *   Final performance metrics (token usage, time).
+
+2.  **Generated Files:**
+    *   **Proof of Concept (PoC) Files:**
+        *   **Location:** `exploit/src/test/`
+        *   **Naming:** `PoC_<VulnerabilityType>_<Timestamp>.sol`
+        *   **Content:** A Foundry test contract designed to exploit a specific vulnerability. Imports `basetest.sol`.
+        *   **Base Test File:** `exploit/src/test/basetest.sol` is generated if it doesn't exist. It provides helper functions and logging for the PoCs.
+    *   **Markdown Report (`--export-md`):**
+        *   **Location:** Project root directory.
+        *   **Naming:** `analysis_report_<ContractName>_<Timestamp>.md`
+        *   **Content:** A comprehensive report including contract details, vulnerability summary table, detailed analysis for each vulnerability (reasoning, code snippets, exploit plan), PoC status, and general recommendations.
+    *   **JSON Report (`--export-json <path>`):**
+        *   **Location:** Path specified by the user.
+        *   **Content:** Structured data containing all analysis results, including vulnerability details, PoC plans, generated code paths, and execution status. Useful for programmatic integration.
+    *   **Fetched Contract Files (if using `--contract-address`):**
+        *   **Location:** `uploads/` directory by default.
+        *   **Naming:** `<ContractAddress>_<Network>.sol` (flattened)
+        *   **Subdirectory (if `--save-separate`):** `uploads/<ContractAddress>_<Network>_contracts/` containing individual source files.
+    *   **Performance Metrics:**
+        *   **Location:** Project root directory.
+        *   **Naming:** `performance_metrics_<Timestamp>.json`
+        *   **Content:** Detailed breakdown of LLM token usage per agent/model, code metrics (lines analyzed), and time taken per stage.
+
+3.  **Interpreting Results:**
+    *   **Confidence Scores:** Pay close attention to the `skeptic_confidence` score (0.0 - 1.0). Higher scores indicate greater certainty after validation. Scores > 0.5 typically warrant investigation.
+    *   **Reasoning & Validation:** Read the `reasoning` (initial finding) and `validity_reasoning` (skeptic's assessment) to understand *why* something is flagged.
+    *   **PoC Status:**
+        *   `SUCCESS`: The generated exploit worked as intended.
+        *   `FAILED`: The exploit failed, even after fix attempts. Review the error and the PoC code (`exploit/src/test/...`).
+        *   `SKIPPED`: PoC generation or execution was disabled (`--skip-poc` or `--no-auto-run`).
+
+---
+
+## Automatic PoC Execution & Fixing
+
+A key feature is the `ExploitRunner`'s ability to test and self-correct generated PoCs:
+
+1.  **Execution:** After `GeneratorAgent` creates a `.sol` file in `exploit/src/test/`, the `ExploitRunner` executes `forge test --match-path <PoC_File_Path>` within the `exploit/` directory.
+2.  **Error Detection:** If the `forge test` command fails (non-zero exit code or specific failure patterns in output), the runner extracts the relevant error messages from `stdout`/`stderr`.
+3.  **LLM Correction:** The failing code, along with the error message, is sent back to the LLM (using the `generator_model`) with a prompt asking it to fix the code.
+4.  **Retry:** The corrected code overwrites the original PoC file, and the `forge test` command is executed again.
+5.  **Loop:** This process repeats up to `--max-retries` times (default 3).
+6.  **Reporting:** The final status (SUCCESS or FAILED), the number of retries, and the last error message (if failed) are reported.
+
+This loop helps overcome common LLM generation errors (syntax issues, incorrect logic, missing imports, setup problems like insufficient funds) automatically.
+
+---
+
+## Troubleshooting
+
+*   **`Slither analysis failed`:**
+    *   Ensure Slither is correctly installed (`slither --version`).
+    *   Check if the Solidity version used by the contract is installed via `solc-select` (`solc-select install <version>`) and selected (`solc-select use <version>`).
+    *   Verify contract code syntax. Slither needs compilable code.
+    *   If analyzing a project directory, ensure import paths are resolvable or provide necessary remappings (though Slither handles many common ones like OpenZeppelin). Check Slither's documentation for complex project structures.
+*   **`API Key Error` / `AuthenticationError`:**
+    *   Verify your API key is correct in the `.env` file (e.g., `OPENAI_API_KEY="..."`).
+    *   Ensure the `.env` file is in the project's root directory.
+    *   Make sure you have activated the virtual environment (`source .venv/bin/activate`).
+    *   Check if the correct environment variable name is used for your LLM provider (e.g., `ANTHROPIC_API_KEY`).
+*   **`Foundry command not found` / `forge: command not found`:**
+    *   Ensure Foundry is installed correctly and its binaries (`forge`, `cast`, etc.) are in your system's PATH. Run `foundryup` again if needed.
+    *   Verify you are running the script from the project root directory. The `ExploitRunner` executes `forge` within the `exploit/` subdirectory.
+*   **PoC Tests Fail (`Execution: FAILED`):**
+    *   Check the error message printed in the console output or the Markdown/JSON report.
+    *   Examine the generated PoC file in `exploit/src/test/`. Common issues include:
+        *   Incorrect contract addresses or setup in the `setUp()` function.
+        *   Insufficient ETH dealt to the attacker contract (`vm.deal`).
+        *   Logical errors in the `testExploit()` function sequence.
+        *   Compatibility issues if the LLM generated code for a different Solidity/Foundry version.
+    *   Try increasing `--max-retries` if it fails after the default attempts.
+*   **RAG Errors / Pinecone Issues:**
+    *   Ensure `PINECONE_API_KEY` and `PINECONE_ENV` are correct in `.env`.
+    *   Verify the Pinecone index exists and has the correct dimensions (usually 1536 for OpenAI embeddings).
+    *   Check network connectivity to Pinecone.
+    *   Run with `--no-rag` to bypass the knowledge base if Pinecone setup is problematic.
+*   **Slow Performance / High Token Usage:**
+    *   Consider using smaller/faster models (like `o3-mini`, `claude-3-haiku`) for some agents, especially the Skeptic or Exploiter.
+    *   Use `--skip-poc` if you only need the analysis and exploit plan.
+    *   Check the `performance_metrics_...json` file to see which agents/models consume the most tokens/time.
+
+```
