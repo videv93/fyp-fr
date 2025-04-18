@@ -317,7 +317,7 @@ python main.py --contract-address 0xAnotherAddressHere --network base --save-sep
 **4. Using Specific Models:**
 
 ```bash
-# Use GPT-4o for all agents
+# Use o3-mini for all agents
 python main.py --all-models o3-mini --contract benchmark_data/contracts/with_errors/access_control/Voting.sol
 
 # Use different models for different agents
