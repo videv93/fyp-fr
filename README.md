@@ -2,12 +2,12 @@
 
 ## SmartGuard: LLM-Powered Smart Contract Vulnerability Analysis & Exploit Generation
 
-**AuditAgent** is an advanced system that leverages a multi-agent Large Language Model (LLM) workflow to automatically analyze smart contracts, identify potential vulnerabilities, and generate proof-of-concept (PoC) exploit code. It integrates static analysis, Retrieval-Augmented Generation (RAG), and a pipeline of specialized AI agents to provide deep security insights.
+**SmartGuard** is an advanced system that leverages a multi-agent Large Language Model (LLM) workflow to automatically analyze smart contracts, identify potential vulnerabilities, and generate proof-of-concept (PoC) exploit code. It integrates static analysis, Retrieval-Augmented Generation (RAG), and a pipeline of specialized AI agents to provide deep security insights.
 
 | Section                                         | Description                                                                     |
 | :---------------------------------------------- | :------------------------------------------------------------------------------ |
-| [Introduction](#auditagentauditagentauditagentauditagentauditagentauditagentauditagentauditagentauditagentauditagentauditagentauditagentauditagentauditagentauditagentauditagentauditagentauditagentauditagent-llm-powered-smart-contract-vulnerability-analysis--exploit-generation) | Project overview and goals.                                                     |
-| [Visual Showcase](#visual-showcase)             | See AuditAgent in action (GUI & CLI).                                           |
+| [Introduction](#smartguard-llm-powered-smart-contract-vulnerability-analysis--exploit-generation) | Project overview and goals.                                                     |
+| [Visual Showcase](#visual-showcase)             | See SmartGuard in action (GUI & CLI).                                           |
 | [How It Works](#how-it-works)                   | High-level explanation of the analysis workflow.                                |
 | [Core Features](#core-features)                 | Key capabilities of the system.                                                 |
 | [Architecture Deep Dive](#architecture-deep-dive) | Detailed system architecture and agent roles.                                   |
@@ -43,7 +43,7 @@
 
 ### Command-Line Interface (CLI) Output
 
-AuditAgent provides rich, real-time feedback directly in your terminal:
+SmartGuard provides rich, real-time feedback directly in your terminal:
 
 https://github.com/user-attachments/assets/8360a8b6-4ca0-49d3-be3c-94c195b3c5a3
 
@@ -51,7 +51,7 @@ https://github.com/user-attachments/assets/8360a8b6-4ca0-49d3-be3c-94c195b3c5a3
 
 ## How It Works
 
-AuditAgent follows a sophisticated pipeline to analyze smart contracts:
+SmartGuard follows a sophisticated pipeline to analyze smart contracts:
 
 1.  **Input:** You provide a Solidity smart contract file, a directory of contracts, or a contract address on a supported blockchain.
 2.  **Static Analysis:** The system uses **Slither** to parse the contract(s), understand the code structure, identify function calls, and perform initial checks based on predefined patterns. If analyzing a multi-file project, it identifies inter-contract relationships.
@@ -295,7 +295,7 @@ python main.py --contract examples/VulnerableLendingContract.sol
 
 **2. Analyzing a Local Multi-File Project Directory:**
 
-Provide the path to the directory containing your `.sol` files. AuditAgent will use Slither to analyze the project structure and the `ProjectContextLLMAgent` to understand inter-contract relationships.
+Provide the path to the directory containing your `.sol` files. SmartGuard will use Slither to analyze the project structure and the `ProjectContextLLMAgent` to understand inter-contract relationships.
 
 ```bash
 # Assumes MyProject/ contains ContractA.sol, ContractB.sol, IContract.sol etc.
@@ -408,7 +408,7 @@ python main.py --export-md --export-json results.json --contract examples/Vulner
 
 ## Web Frontend
 
-AuditAgent includes a web-based frontend interface that provides a user-friendly way to interact with the system, visualize the analysis process, and explore results.
+SmartGuard includes a web-based frontend interface that provides a user-friendly way to interact with the system, visualize the analysis process, and explore results.
 
 ### Setup and Installation
 
@@ -481,7 +481,7 @@ The web frontend provides several advantages over the command-line interface:
 The architecture follows a client-server model:
 
 1. **Backend** (Flask + Flask-SocketIO):
-   - Interfaces with the core AuditAgent system
+   - Interfaces with the core SmartGuard system
    - Provides RESTful API endpoints
    - Implements real-time communication with WebSockets
    - Manages analysis jobs and their states
@@ -533,7 +533,7 @@ To analyze a contract using the web frontend:
 
 ## Benchmarking and Evaluation
 
-AuditAgent includes two powerful benchmarking scripts for evaluating system performance:
+SmartGuard includes two powerful benchmarking scripts for evaluating system performance:
 
 ### CTFBench Evaluator
 
@@ -600,7 +600,7 @@ Performance data is saved to `performance_metrics_<timestamp>.json` files, which
 
 ## Understanding the Output
 
-AuditAgent generates several outputs:
+SmartGuard generates several outputs:
 
 1.  **Console Output:**
     *   Real-time progress updates from each agent.
