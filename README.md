@@ -1,6 +1,6 @@
 # FYP: Generate Vulnerable Transaction Sequences for Smart Contract using Large Language Models
 
-## AuditAgent: LLM-Powered Smart Contract Vulnerability Analysis & Exploit Generation
+## SmartGuard: LLM-Powered Smart Contract Vulnerability Analysis & Exploit Generation
 
 **AuditAgent** is an advanced system that leverages a multi-agent Large Language Model (LLM) workflow to automatically analyze smart contracts, identify potential vulnerabilities, and generate proof-of-concept (PoC) exploit code. It integrates static analysis, Retrieval-Augmented Generation (RAG), and a pipeline of specialized AI agents to provide deep security insights.
 
