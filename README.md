@@ -1,3 +1,5 @@
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/advaitbd/fyp-fr)
+
 # FYP: Generate Vulnerable Transaction Sequences for Smart Contract using Large Language Models
 
 ## SmartGuard: LLM-Powered Smart Contract Vulnerability Analysis & Exploit Generation
