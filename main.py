@@ -4,6 +4,7 @@
 import os
 import json
 import argparse
+from pathlib import Path
 from dotenv import load_dotenv
 from static_analysis.parse_contract import analyze_contract
 from llm_agents.agent_coordinator import AgentCoordinator

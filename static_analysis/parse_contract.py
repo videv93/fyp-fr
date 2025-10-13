@@ -11,17 +11,32 @@ import os
 from .extract_contracts import process_contract_file
 
 
+def _detect_foundry_project(filepath: str) -> str:
+    """
+    Detects if the contract is part of a Foundry project by looking for foundry.toml.
+    Returns the project root directory if found, None otherwise.
+    """
+    current_dir = os.path.dirname(os.path.abspath(filepath))
+
+    # Walk up the directory tree looking for foundry.toml
+    while current_dir != os.path.dirname(current_dir):  # Stop at root
+        foundry_config = os.path.join(current_dir, 'foundry.toml')
+        if os.path.exists(foundry_config):
+            return current_dir
+        current_dir = os.path.dirname(current_dir)
+
+    return None
+
+
 def analyze_contract(filepath: str):
     """
     Analyzes a Solidity contract using Slither and returns:
     1. A list of function details (name, visibility, parameters, returns, etc.)
     2. A call graph mapping each function to the functions it calls
     """
-    # Define the solc_remaps
-    solc_remaps = [
-        "@openzeppelin=/Users/advait/Desktop/NTU/fyp-fr/static_analysis/node_modules/@openzeppelin"
-    ]
-    
+    # Check if this is a Foundry project
+    foundry_root = _detect_foundry_project(filepath)
+
     # Preprocess the contract file - check if it's a JSON bundle and extract if needed
     temp_dir = None
     try:
@@ -30,16 +45,39 @@ def analyze_contract(filepath: str):
         if processed_filepath != filepath:
             print(f"Preprocessed JSON contract: {filepath} -> {processed_filepath}")
             filepath = processed_filepath
+            # Re-check for Foundry project after processing
+            if foundry_root is None:
+                foundry_root = _detect_foundry_project(filepath)
     except Exception as e:
         print(f"Error preprocessing contract: {e}")
         # Continue with the original filepath
-    
-    # Initialize Slither on the given file. This parses and compiles the contract.
-    slither = Slither(
-        filepath,
-        solc_args="--via-ir --optimize",
-        solc_remaps=solc_remaps,
-    )
+
+    # Initialize Slither - if Foundry project detected, use it directly
+    if foundry_root:
+        print(f"→ Detected Foundry project at: {foundry_root}")
+        # Convert filepath to absolute path before changing directory
+        abs_filepath = os.path.abspath(filepath)
+        # Change to foundry project directory for Slither to pick up foundry.toml
+        original_cwd = os.getcwd()
+        os.chdir(foundry_root)
+        try:
+            slither = Slither(
+                abs_filepath,
+                foundry_compile_all=True,
+                foundry_out_directory=os.path.join(foundry_root, "out")
+            )
+        finally:
+            os.chdir(original_cwd)
+    else:
+        # Fallback to hardcoded remaps (legacy behavior)
+        solc_remaps = [
+            "@openzeppelin=/Users/advait/Desktop/NTU/fyp-fr/static_analysis/node_modules/@openzeppelin"
+        ]
+        slither = Slither(
+            filepath,
+            solc_args="--via-ir --optimize",
+            solc_remaps=solc_remaps,
+        )
 
     # slither = Slither(filepath)
     printer = PrinterCallGraphV2(slither, None)

@@ -48,6 +48,12 @@ class ModelConfig:
             # DeepSeek models
             "deepseek-chat": False,
             "deepseek-reasoner": True,
+            # Google Gemini models (using OpenAI-compatible API)
+            "models/gemini-2.5-flash": False,
+            "models/gemini-2.5-pro": False,
+            "models/gemini-2.0-flash-exp": False,
+            "models/gemini-2.0-flash": False,
+            "models/gemini-2.0-flash-thinking-exp-01-21": True,
         }
 
         # Define model provider mappings
@@ -62,6 +68,12 @@ class ModelConfig:
             # DeepSeek models
             "deepseek-chat": "deepseek",
             "deepseek-reasoner": "deepseek",
+            # Google Gemini models (using OpenAI-compatible API)
+            "models/gemini-2.5-flash": "gemini",
+            "models/gemini-2.5-pro": "gemini",
+            "models/gemini-2.0-flash-exp": "gemini",
+            "models/gemini-2.0-flash": "gemini",
+            "models/gemini-2.0-flash-thinking-exp-01-21": "gemini",
         }
 
         # Define provider base URLs
@@ -69,6 +81,7 @@ class ModelConfig:
             "openai": None,  # Default OpenAI URL
             "anthropic": "https://api.anthropic.com/v1/",
             "deepseek": "https://api.deepseek.com",
+            "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
         }
 
     def get_model(self, agent_type: str) -> str:
@@ -124,6 +137,8 @@ class ModelConfig:
             api_key_env = "ANTHROPIC_API_KEY"
         elif provider == "deepseek":
             api_key_env = "DEEPSEEK_API_KEY"
+        elif provider == "gemini":
+            api_key_env = "GOOGLE_API_KEY"
         else:
             api_key_env = "OPENAI_API_KEY"
 
