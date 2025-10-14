@@ -27,7 +27,7 @@ static_analysis/test_contracts/sample.sol
 # benchmark_data_no_errors
 
 # Exploit PoCs
-exploit/src/test
+# exploit/src/test
 
 # Logs
 benchmark_evaluation.log

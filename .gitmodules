@@ -4,3 +4,15 @@
 [submodule "contests/hybra-finance"]
 	path = contests/hybra-finance
 	url = https://github.com/code-423n4/2025-10-hybra-finance.git
+[submodule "contests/2025-10-raisebox-faucet"]
+	path = contests/2025-10-raisebox-faucet
+	url = https://github.com/CodeHawks-Contests/2025-10-raisebox-faucet.git
+[submodule "exploit/lib/openzeppelin-contracts"]
+	path = exploit/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "contests/3-passwordstore-audit"]
+	path = contests/3-passwordstore-audit
+	url = https://github.com/Cyfrin/3-passwordstore-audit.git
+[submodule "contests/2025-10-sequence"]
+	path = contests/2025-10-sequence
+	url = https://github.com/code-423n4/2025-10-sequence

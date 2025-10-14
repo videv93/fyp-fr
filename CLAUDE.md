@@ -39,7 +39,8 @@ The system uses a coordinated agent workflow managed by `AgentCoordinator` (llm_
 - **Multi-Provider Support**:
   - OpenAI (o3-mini, gpt-4o)
   - Anthropic (claude-3-5-haiku-latest, claude-3-7-sonnet-latest)
-  - DeepSeek (deepseek-chat, deepseek-reasoner)
+  - DeepSeek Direct (deepseek-chat, deepseek-reasoner)
+  - OpenRouter (deepseek/deepseek-chat-v3-0324)
   - Google Gemini (models/gemini-2.5-flash, models/gemini-2.5-pro, models/gemini-2.0-flash, models/gemini-1.5-flash, models/gemini-1.5-pro)
 - **Reasoning Models**: o3-mini, o1-mini, deepseek-reasoner use specialized reasoning prompts
 - **Per-Agent Configuration**: Each agent can use a different model for optimal performance/cost tradeoffs
@@ -77,7 +78,8 @@ cd ..
 Create `.env` file in project root with required API keys:
 - `OPENAI_API_KEY` - Required for OpenAI models (default: o3-mini)
 - `ANTHROPIC_API_KEY` - Required if using Claude models
-- `DEEPSEEK_API_KEY` - Required if using DeepSeek models
+- `DEEPSEEK_API_KEY` - Required if using DeepSeek models via direct API
+- `OPENROUTER_API_KEY` - Required if using OpenRouter models (e.g., deepseek/deepseek-chat-v3-0324)
 - `GOOGLE_API_KEY` - Required if using Gemini models
 - `PINECONE_API_KEY`, `PINECONE_ENV` - Optional, for RAG functionality
 - `ETHERSCAN_API_KEY`, `BSCSCAN_API_KEY`, `BASESCAN_API_KEY`, `ARBISCAN_API_KEY` - Optional, for fetching contracts from blockchain
@@ -103,6 +105,10 @@ python main.py --analyzer-model claude-3-7-sonnet-latest --skeptic-model o3-mini
 # Use Google Gemini models
 python main.py --all-models "models/gemini-2.0-flash" --contract examples/VulnerableLendingContract.sol
 python main.py --analyzer-model "models/gemini-2.5-pro" --skeptic-model "models/gemini-2.0-flash" --contract file.sol
+
+# Use DeepSeek Chat V3 via OpenRouter
+python main.py --all-models "deepseek/deepseek-chat-v3-0324" --contract examples/VulnerableLendingContract.sol
+python main.py --analyzer-model "deepseek/deepseek-chat-v3-0324" --skeptic-model o3-mini --contract file.sol
 
 # Skip PoC generation (analysis only)
 python main.py --skip-poc --contract file.sol
@@ -216,11 +222,12 @@ npm run build
 
 ### Model Configuration Best Practices
 
-- **Fast Analysis**: Use `o3-mini` or `models/gemini-2.0-flash` for all agents
+- **Fast Analysis**: Use `o3-mini`, `models/gemini-2.0-flash`, or `deepseek/deepseek-chat-v3-0324` for all agents
 - **High Accuracy**: Use `claude-3-7-sonnet-latest` or `models/gemini-2.5-pro` for analyzer, skeptic, generator
-- **Cost Optimization**: Mix models - use Claude/Gemini Pro for critical agents (analyzer, generator), Flash models for others
+- **Cost Optimization**: Mix models - use Claude/Gemini Pro for critical agents (analyzer, generator), Flash models or DeepSeek for others
 - **Reasoning Models**: o3-mini, o1-mini, deepseek-reasoner support extended reasoning but may be slower
 - **Gemini Models**: Fast and cost-effective, good balance between speed and accuracy. Must use `models/` prefix.
+- **OpenRouter Models**: Access to DeepSeek V3 and other models via OpenRouter. Use full model path (e.g., `deepseek/deepseek-chat-v3-0324`).
 
 ### Performance Tracking
 
@@ -296,10 +303,12 @@ npm run build
 - Check correct API key for model provider in `.env`
 - OpenAI models need `OPENAI_API_KEY`
 - Claude models need `ANTHROPIC_API_KEY`
-- DeepSeek models need `DEEPSEEK_API_KEY`
+- DeepSeek models (direct API) need `DEEPSEEK_API_KEY`
+- OpenRouter models need `OPENROUTER_API_KEY`
 - Gemini models need `GOOGLE_API_KEY`
 - Verify model names match those in `llm_agents/config.py` model_provider dict
 - For Gemini models, ensure you include the `models/` prefix (e.g., `models/gemini-2.0-flash`)
+- For OpenRouter models, use full model path (e.g., `deepseek/deepseek-chat-v3-0324`)
 
 ### Foundry Not Found
 

@@ -48,6 +48,8 @@ class ModelConfig:
             # DeepSeek models
             "deepseek-chat": False,
             "deepseek-reasoner": True,
+            # DeepSeek models via OpenRouter
+            "deepseek/deepseek-chat-v3-0324": False,
             # Google Gemini models (using OpenAI-compatible API)
             "models/gemini-2.5-flash": False,
             "models/gemini-2.5-pro": False,
@@ -68,6 +70,8 @@ class ModelConfig:
             # DeepSeek models
             "deepseek-chat": "deepseek",
             "deepseek-reasoner": "deepseek",
+            # DeepSeek models via OpenRouter
+            "deepseek/deepseek-chat-v3-0324": "openrouter",
             # Google Gemini models (using OpenAI-compatible API)
             "models/gemini-2.5-flash": "gemini",
             "models/gemini-2.5-pro": "gemini",
@@ -81,6 +85,7 @@ class ModelConfig:
             "openai": None,  # Default OpenAI URL
             "anthropic": "https://api.anthropic.com/v1/",
             "deepseek": "https://api.deepseek.com",
+            "openrouter": "https://openrouter.ai/api/v1",
             "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
         }
 
@@ -137,6 +142,8 @@ class ModelConfig:
             api_key_env = "ANTHROPIC_API_KEY"
         elif provider == "deepseek":
             api_key_env = "DEEPSEEK_API_KEY"
+        elif provider == "openrouter":
+            api_key_env = "OPENROUTER_API_KEY"
         elif provider == "gemini":
             api_key_env = "GOOGLE_API_KEY"
         else:
