@@ -16,3 +16,9 @@
 [submodule "contests/2025-10-sequence"]
 	path = contests/2025-10-sequence
 	url = https://github.com/code-423n4/2025-10-sequence
+[submodule "v3-poc"]
+	path = v3-poc
+	url = https://github.com/alchemix-finance/v3-poc.git
+[submodule "contests/v3-poc"]
+	path = contests/v3-poc
+	url = https://github.com/alchemix-finance/v3-poc.git
