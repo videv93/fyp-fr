@@ -58,6 +58,78 @@ def parse_scope_file(scope_file_path, base_dir):
         return []
 
 
+def analyze_single_contract(
+    contract_path,
+    contracts_dir,
+    model_config,
+    auto_run_config,
+    use_rag,
+    project_context=None,
+):
+    """Analyze a single contract file
+
+    Args:
+        contract_path: Path to the contract file
+        contracts_dir: Directory containing all contracts (for context)
+        model_config: Model configuration
+        auto_run_config: Auto-run configuration
+        use_rag: Whether to use RAG
+        project_context: Pre-computed project context (optional)
+
+    Returns:
+        Dictionary with analysis results
+    """
+    contract_name = os.path.basename(contract_path)
+    print_header(f"Analyzing: {contract_name}")
+
+    # Run static analysis on single file
+    print_step(f"Running static analysis on: {contract_path}")
+    try:
+        function_details, call_graph, detector_results = analyze_contract(contract_path)
+        print_success(f"Static analysis complete. Found {len(function_details)} functions.")
+    except Exception as slither_error:
+        print_error(f"Slither analysis failed on {contract_path}: {slither_error}")
+        return None
+
+    # Read contract source code
+    try:
+        with open(contract_path, "r", encoding="utf-8") as f:
+            source_code = f.read()
+    except Exception as read_error:
+        print_error(f"Failed to read contract source code from {contract_path}: {read_error}")
+        return None
+
+    # Prepare for LLM analysis
+    contract_info = {
+        "function_details": function_details,
+        "call_graph": call_graph,
+        "source_code": source_code,
+        "detector_results": detector_results,
+    }
+
+    # Add contracts directory path for context
+    if contracts_dir and os.path.isdir(contracts_dir):
+        contract_info["contracts_dir"] = contracts_dir
+
+    # Add pre-computed project context if available
+    if project_context:
+        contract_info["project_context"] = project_context
+
+    # Run LLM analysis
+    print_step("Running LLM analysis...")
+    coordinator = AgentCoordinator(model_config=model_config, use_rag=use_rag)
+
+    results = coordinator.analyze_contract(
+        contract_info, auto_run_config=auto_run_config
+    )
+
+    # Add contract path to results
+    results["contract_path"] = contract_path
+    results["contract_name"] = contract_name
+
+    return results
+
+
 def parse_arguments():
     """Parse command line arguments for model configuration"""
     parser = argparse.ArgumentParser(
@@ -214,6 +286,9 @@ def main():
         )
 
     # Display model configuration
+    from rich.console import Console
+    console = Console()
+
     print_step("Configuration:")
     console.print(f"  Analyzer: [bold]{model_config.analyzer_model}[/bold]")
     console.print(f"  Skeptic: [bold]{model_config.skeptic_model}[/bold]")
@@ -340,107 +415,14 @@ def main():
 
     # --- REMOVED log_code_analysis call from here ---
 
-    # Start static analysis stage
-    performance_tracker.start_stage("static_analysis")
-    print_step(f"Starting static analysis on: {contracts_dir or filepath}")
-
-    # Determine target for Slither
-    analysis_target = contracts_dir if contracts_dir else filepath
-
-    with create_progress_spinner("Running static analysis") as progress:
-        task = progress.add_task("Analyzing contract structure...")
-        try:
-            function_details, call_graph, detector_results = analyze_contract(
-                analysis_target
-            )
-            progress.update(task, completed=True)
-            print_success(
-                f"Static analysis complete. Found {len(function_details)} functions."
-            )
-        except Exception as slither_error:
-            print_error(
-                f"Slither analysis failed on {analysis_target}: {slither_error}"
-            )
-            # Try fallback to flattened file if directory analysis failed
-            if analysis_target != filepath and os.path.exists(filepath):
-                print_warning(f"Attempting static analysis fallback on: {filepath}")
-                try:
-                    function_details, call_graph, detector_results = analyze_contract(
-                        filepath
-                    )
-                    progress.update(task, completed=True)
-                    print_success(
-                        f"Fallback static analysis complete. Found {len(function_details)} functions."
-                    )
-                except Exception as fallback_error:
-                    print_error(
-                        f"Fallback static analysis also failed: {fallback_error}"
-                    )
-                    return  # Stop if static analysis fails
-            else:
-                return  # Stop if static analysis fails
-
-    # Read contract source code
-    # If scope_contracts is provided and we have multiple files, combine them
-    # Otherwise, use the primary file
-    source_code = ""
-
-    if scope_contracts and len(scope_contracts) > 1:
-        # Combine all in-scope contracts
-        print_step(f"Reading {len(scope_contracts)} in-scope contracts...")
-        combined_sources = []
-        for contract_path in scope_contracts:
-            try:
-                with open(contract_path, "r", encoding="utf-8") as f:
-                    file_content = f.read()
-                    # Add separator with filename
-                    combined_sources.append(
-                        f"// ===== File: {os.path.relpath(contract_path, contracts_dir or os.path.dirname(filepath))} =====\n{file_content}"
-                    )
-            except Exception as read_error:
-                print_warning(f"Failed to read {contract_path}: {read_error}")
-                continue
-
-        source_code = "\n\n".join(combined_sources)
-        print_success(f"Combined {len(combined_sources)} contract files for analysis")
-    else:
-        # Single file or no scope filtering
-        try:
-            with open(filepath, "r", encoding="utf-8") as f:
-                source_code = f.read()
-        except Exception as read_error:
-            print_error(
-                f"Failed to read contract source code from {filepath}: {read_error}"
-            )
-            return
-
-    # Prepare for LLM analysis
-    contract_info = {
-        "function_details": function_details,
-        "call_graph": call_graph,
-        "source_code": source_code,
-        "detector_results": detector_results,
-    }
-
-    # Add contracts directory path if it exists
-    if contracts_dir and os.path.isdir(contracts_dir):
-        contract_info["contracts_dir"] = contracts_dir
-        print_step(
-            f"Added contracts directory for inter-contract analysis: {contracts_dir}"
-        )
-
-    # Run LLM analysis
-    performance_tracker.start_stage("llm_analysis")
-    print_header("Running LLM Analysis")
-    coordinator = AgentCoordinator(model_config=model_config, use_rag=not args.no_rag)
-
-    # Pass auto-run configuration
+    # Prepare auto-run configuration
     auto_run_config = {
         "auto_run": not args.no_auto_run,
         "max_retries": args.max_retries,
     }
 
     # Display run settings
+    print_header("Running Analysis")
     if not args.no_auto_run:
         print_step(f"Auto-run enabled with max {args.max_retries} fix attempts")
     else:
@@ -450,28 +432,191 @@ def main():
     else:
         print_step("RAG disabled, analysis will use only current contract code")
 
-    # Analyze the contract with all the configured agents
-    results = coordinator.analyze_contract(
-        contract_info, auto_run_config=auto_run_config
-    )
+    # Check if we should analyze multiple contracts separately
+    if scope_contracts and len(scope_contracts) > 1:
+        # Analyze each contract separately
+        print_header(f"Analyzing {len(scope_contracts)} contracts separately")
+        all_results = []
+
+        # Run ProjectContextLLMAgent once before analyzing individual contracts
+        project_context = None
+        if contracts_dir and os.path.isdir(contracts_dir):
+            from llm_agents.agents.project_context_llm import ProjectContextLLMAgent
+
+            performance_tracker.start_stage("project_context_agent")
+            print_step("Running ProjectContextLLMAgent for overall project structure...")
+
+            context_agent = ProjectContextLLMAgent(model_config=model_config)
+            project_context = context_agent.analyze_project(contracts_dir, call_graph=None)
+
+            insights = project_context.get("insights", [])
+            dependencies = project_context.get("dependencies", [])
+
+            if insights or dependencies:
+                print_success(f"ProjectContextLLMAgent: Found {len(insights)} insights and {len(dependencies)} dependencies")
+                if insights:
+                    console.print("[bold]Key insights:[/bold]")
+                    for i, insight in enumerate(insights[:3]):
+                        console.print(f"  - {insight}")
+                    if len(insights) > 3:
+                        console.print(f"  - ...and {len(insights) - 3} more insights")
+
+                if dependencies:
+                    console.print("[bold]Important dependencies:[/bold]")
+                    for i, dep in enumerate(dependencies[:3]):
+                        console.print(f"  - {dep}")
+                    if len(dependencies) > 3:
+                        console.print(f"  - ...and {len(dependencies) - 3} more dependencies")
+            else:
+                print_warning("ProjectContextLLMAgent: No significant insights found")
+
+            performance_tracker.end_stage()
+
+        performance_tracker.start_stage("llm_analysis")
+
+        for idx, contract_path in enumerate(scope_contracts, 1):
+            print_step(f"\n[{idx}/{len(scope_contracts)}] Analyzing {os.path.basename(contract_path)}")
+
+            result = analyze_single_contract(
+                contract_path=contract_path,
+                contracts_dir=contracts_dir,
+                model_config=model_config,
+                auto_run_config=auto_run_config,
+                use_rag=not args.no_rag,
+                project_context=project_context,  # Pass the pre-computed context
+            )
+
+            if result:
+                all_results.append(result)
+                # Quick summary for this contract
+                rechecked = result.get("rechecked_vulnerabilities", [])
+                if rechecked:
+                    print_success(f"  Found {len(rechecked)} potential vulnerabilities")
+                else:
+                    print_step("  No vulnerabilities found")
+            else:
+                print_warning(f"  Analysis failed for {os.path.basename(contract_path)}")
+
+        performance_tracker.end_stage()
+
+        # Aggregate results from all contracts
+        results = {
+            "contracts_analyzed": len(all_results),
+            "individual_results": all_results,
+            "rechecked_vulnerabilities": [],
+            "generated_pocs": [],
+        }
+
+        # Flatten vulnerabilities and PoCs from all contracts
+        for contract_result in all_results:
+            for vuln in contract_result.get("rechecked_vulnerabilities", []):
+                vuln["source_contract"] = contract_result["contract_name"]
+                results["rechecked_vulnerabilities"].append(vuln)
+
+            for poc in contract_result.get("generated_pocs", []):
+                poc["source_contract"] = contract_result["contract_name"]
+                results["generated_pocs"].append(poc)
+
+    else:
+        # Single contract analysis (original flow)
+        performance_tracker.start_stage("static_analysis")
+        print_step(f"Starting static analysis on: {contracts_dir or filepath}")
+
+        # Determine target for Slither
+        analysis_target = contracts_dir if contracts_dir else filepath
+
+        with create_progress_spinner("Running static analysis") as progress:
+            task = progress.add_task("Analyzing contract structure...")
+            try:
+                function_details, call_graph, detector_results = analyze_contract(
+                    analysis_target
+                )
+                progress.update(task, completed=True)
+                print_success(
+                    f"Static analysis complete. Found {len(function_details)} functions."
+                )
+            except Exception as slither_error:
+                print_error(
+                    f"Slither analysis failed on {analysis_target}: {slither_error}"
+                )
+                # Try fallback to flattened file if directory analysis failed
+                if analysis_target != filepath and os.path.exists(filepath):
+                    print_warning(f"Attempting static analysis fallback on: {filepath}")
+                    try:
+                        function_details, call_graph, detector_results = analyze_contract(
+                            filepath
+                        )
+                        progress.update(task, completed=True)
+                        print_success(
+                            f"Fallback static analysis complete. Found {len(function_details)} functions."
+                        )
+                    except Exception as fallback_error:
+                        print_error(
+                            f"Fallback static analysis also failed: {fallback_error}"
+                        )
+                        return  # Stop if static analysis fails
+                else:
+                    return  # Stop if static analysis fails
+
+        # Read contract source code
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                source_code = f.read()
+        except Exception as read_error:
+            print_error(
+                f"Failed to read contract source code from {filepath}: {read_error}"
+            )
+            return
+
+        # Prepare for LLM analysis
+        contract_info = {
+            "function_details": function_details,
+            "call_graph": call_graph,
+            "source_code": source_code,
+            "detector_results": detector_results,
+        }
+
+        # Add contracts directory path if it exists
+        if contracts_dir and os.path.isdir(contracts_dir):
+            contract_info["contracts_dir"] = contracts_dir
+            print_step(
+                f"Added contracts directory for inter-contract analysis: {contracts_dir}"
+            )
+
+        # Run LLM analysis
+        performance_tracker.start_stage("llm_analysis")
+        print_header("Running LLM Analysis")
+        coordinator = AgentCoordinator(model_config=model_config, use_rag=not args.no_rag)
+
+        # Analyze the contract with all the configured agents
+        results = coordinator.analyze_contract(
+            contract_info, auto_run_config=auto_run_config
+        )
 
     # Print results summary
     performance_tracker.start_stage("results_reporting")
     print_header("Analysis Results")
+
+    # Handle multiple contract results
+    if "individual_results" in results:
+        console.print(f"\n[bold]Analyzed {results['contracts_analyzed']} contracts[/bold]")
+
     rechecked = results.get("rechecked_vulnerabilities", [])
 
     if not rechecked:
         print_warning("No vulnerabilities found")
     else:
-        print_success(f"Found {len(rechecked)} potential vulnerabilities")
+        print_success(f"Found {len(rechecked)} potential vulnerabilities across all contracts")
         for idx, v in enumerate(rechecked, start=1):
             confidence = v.get("skeptic_confidence", 0)
             color = (
                 "red" if confidence > 0.7 else "yellow" if confidence > 0.4 else "green"
             )
+            source_contract = v.get("source_contract", "Unknown")
             console.print(
                 f"\n[bold {color}]Vulnerability #{idx}: {v['vulnerability_type']}[/bold {color}] (Confidence: {confidence:.2f})"
             )
+            console.print(f"  Contract: [cyan]{source_contract}[/cyan]")
             console.print(f"  Reasoning: {v.get('reasoning', 'N/A')}")
             console.print(f"  Validation: {v.get('validity_reasoning', '')}")
             # Optionally print code snippets etc.
@@ -485,9 +630,11 @@ def main():
         print_success(f"Generated {len(pocs)} PoCs for high-confidence vulnerabilities")
         for pidx, poc in enumerate(pocs, start=1):
             vuln = poc["vulnerability"]
+            source_contract = poc.get("source_contract", "Unknown")
             console.print(
                 f"\n[bold]PoC #{pidx}[/bold] - {vuln['vulnerability_type']} (Confidence: {vuln.get('skeptic_confidence', 0):.2f})"
             )
+            console.print(f"  Contract: [cyan]{source_contract}[/cyan]")
             if "poc_data" in poc:
                 poc_data = poc["poc_data"]
                 console.print(
@@ -596,10 +743,14 @@ def export_results_to_markdown(contract_path, results):
     from datetime import datetime
     import os
 
-    # Create output filename based on the contract name
-    contract_name = os.path.basename(contract_path)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_file = f"analysis_report_{contract_name}_{timestamp}.md"
+    # Create output filename based on the contract name or project
+    if "individual_results" in results:
+        # Multiple contracts analyzed
+        output_file = f"analysis_report_multi_contract_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+    else:
+        contract_name = os.path.basename(contract_path)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_file = f"analysis_report_{contract_name}_{timestamp}.md"
 
     print_step(f"Exporting analysis report to {output_file}")
 
@@ -610,7 +761,11 @@ def export_results_to_markdown(contract_path, results):
         with open(output_file, "w", encoding="utf-8") as f:
             # Write header
             f.write(f"# Smart Contract Vulnerability Analysis Report\n\n")
-            f.write(f"**Contract:** {contract_path}\n")
+            if "individual_results" in results:
+                f.write(f"**Contracts Analyzed:** {results['contracts_analyzed']}\n")
+                f.write(f"**Analysis Type:** Multi-contract scope analysis\n")
+            else:
+                f.write(f"**Contract:** {contract_path}\n")
             f.write(f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
 
             # Vulnerability summary
@@ -621,21 +776,41 @@ def export_results_to_markdown(contract_path, results):
                 f.write(f"Found {len(rechecked_vulns)} potential vulnerabilities:\n\n")
 
                 # Create a summary table
-                f.write(
-                    "| # | Vulnerability Type | Confidence | Affected Functions |\n"
-                )
-                f.write("|---|-------------------|------------|--------------------|\n")
-
-                for idx, vuln in enumerate(rechecked_vulns, start=1):
-                    vuln_type = vuln.get("vulnerability_type", "Unknown")
-                    try:
-                        confidence = float(vuln.get("skeptic_confidence", 0))
-                    except (ValueError, TypeError):
-                        confidence = 0.0
-                    affected = ", ".join(vuln.get("affected_functions", ["Unknown"]))
+                if "individual_results" in results:
+                    # Include source contract column
                     f.write(
-                        f"| {idx} | {vuln_type} | {confidence:.2f} | {affected} |\n"
+                        "| # | Contract | Vulnerability Type | Confidence | Affected Functions |\n"
                     )
+                    f.write("|---|----------|-------------------|------------|--------------------|\n")
+
+                    for idx, vuln in enumerate(rechecked_vulns, start=1):
+                        vuln_type = vuln.get("vulnerability_type", "Unknown")
+                        source_contract = vuln.get("source_contract", "Unknown")
+                        try:
+                            confidence = float(vuln.get("skeptic_confidence", 0))
+                        except (ValueError, TypeError):
+                            confidence = 0.0
+                        affected = ", ".join(vuln.get("affected_functions", ["Unknown"]))
+                        f.write(
+                            f"| {idx} | {source_contract} | {vuln_type} | {confidence:.2f} | {affected} |\n"
+                        )
+                else:
+                    # Single contract table
+                    f.write(
+                        "| # | Vulnerability Type | Confidence | Affected Functions |\n"
+                    )
+                    f.write("|---|-------------------|------------|--------------------|\n")
+
+                    for idx, vuln in enumerate(rechecked_vulns, start=1):
+                        vuln_type = vuln.get("vulnerability_type", "Unknown")
+                        try:
+                            confidence = float(vuln.get("skeptic_confidence", 0))
+                        except (ValueError, TypeError):
+                            confidence = 0.0
+                        affected = ", ".join(vuln.get("affected_functions", ["Unknown"]))
+                        f.write(
+                            f"| {idx} | {vuln_type} | {confidence:.2f} | {affected} |\n"
+                        )
 
                 f.write("\n")
 
@@ -651,6 +826,8 @@ def export_results_to_markdown(contract_path, results):
                         confidence = 0.0
 
                     f.write(f"### Vulnerability #{idx}: {vuln_type}\n\n")
+                    if "source_contract" in vuln:
+                        f.write(f"**Contract:** {vuln['source_contract']}\n\n")
                     f.write(f"**Confidence:** {confidence:.2f}\n\n")
 
                     if vuln.get("reasoning"):
