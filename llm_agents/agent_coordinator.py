@@ -61,27 +61,28 @@ class AgentCoordinator:
         self.runner.max_retries = auto_run_config.get("max_retries", 3)
 
         # 1. ProjectContextLLMAgent => inter-contract relationships
-        if "contracts_dir" in contract_info and contract_info["contracts_dir"]:
+        # Skip if project_context is already provided (from multi-contract analysis)
+        if "project_context" not in contract_info and "contracts_dir" in contract_info and contract_info["contracts_dir"]:
             performance_tracker.start_stage("project_context_agent")
             console.print("[bold blue]🔍 ProjectContextLLMAgent: Analyzing contract relationships...[/bold blue]")
             project_context_results = self.project_context.analyze_project(
                 contract_info["contracts_dir"],
                 contract_info.get("call_graph")
             )
-            
+
             # Display the project context insights
             insights = project_context_results.get("insights", [])
             dependencies = project_context_results.get("dependencies", [])
             if insights or dependencies:
                 console.print(f"[bold green]✓ ProjectContextLLMAgent: Found {len(insights)} insights and {len(dependencies)} dependencies[/bold green]")
-                
+
                 if insights:
                     console.print("[bold]Key insights:[/bold]")
                     for i, insight in enumerate(insights[:3]):  # Show top 3 insights
                         console.print(f"  - {insight}")
                     if len(insights) > 3:
                         console.print(f"  - ...and {len(insights) - 3} more insights")
-                
+
                 if dependencies:
                     console.print("[bold]Important dependencies:[/bold]")
                     for i, dep in enumerate(dependencies[:3]):  # Show top 3 dependencies
@@ -90,9 +91,12 @@ class AgentCoordinator:
                         console.print(f"  - ...and {len(dependencies) - 3} more dependencies")
             else:
                 console.print("[bold yellow]ProjectContextLLMAgent: No significant insights found[/bold yellow]")
-                
+
             # Add project context to contract_info for the analyzer
             contract_info["project_context"] = project_context_results
+        elif "project_context" in contract_info:
+            # Project context already provided, skip this step
+            console.print("[dim]Using pre-computed project context[/dim]")
 
         # 2. Analyzer => all vulnerabilities
         performance_tracker.start_stage("analyzer_agent")
