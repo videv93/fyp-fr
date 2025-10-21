@@ -38,3 +38,6 @@ token_usage_stats.json
 
 # Ignore all Pycache
 **/__pycache__/
+
+# .idea
+.idea
