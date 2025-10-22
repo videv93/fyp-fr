@@ -6,6 +6,7 @@ import json
 from typing import Dict, List, Optional
 from openai import OpenAI
 from utils.print_utils import create_progress_spinner, print_warning, print_success
+from utils.langsmith_tracing import trace_agent_call
 
 class GeneratorAgent:
     def __init__(self, model_config=None):
@@ -122,45 +123,10 @@ Remember this is for educational and defensive purposes only. The goal is to hel
 Return only the complete Solidity code with no additional explanations.
 """
 
-        # Create appropriate messages based on model type
-        if self.model_config.supports_reasoning(self.model_name):
-            messages = [
-                {"role": "system", "content": "You are a smart contract security educator creating educational PoC tests."},
-                {"role": "user", "content": prompt}
-            ]
-        else:
-            messages = [
-                {"role": "user", "content": prompt}
-            ]
+        system_prompt = "You are a smart contract security educator creating educational PoC tests."
 
-        # Import token tracker
-        from utils.token_tracker import token_tracker
-        
-        if self.model_name == "claude-3-7-sonnet-latest":
-            resp = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                max_tokens=64000,
-                extra_body={ "thinking": { "type": "enabled", "budget_tokens": 2000 } },
-            )
-        else:
-            resp = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=messages
-            )
-            
-        # Track token usage
-        if hasattr(resp, 'usage') and resp.usage:
-            token_tracker.log_tokens(
-                agent_name="generator",
-                model_name=self.model_name,
-                prompt_tokens=resp.usage.prompt_tokens,
-                completion_tokens=resp.usage.completion_tokens,
-                total_tokens=resp.usage.total_tokens
-            )
-
-        # Extract the code from the response
-        response_text = resp.choices[0].message.content
+        # Call LLM
+        response_text = self._call_llm(system_prompt, prompt)
 
         # Ensure we have a valid contract by doing some basic checks
         if "contract" not in response_text or "function test" not in response_text:
@@ -210,6 +176,50 @@ Return only the complete Solidity code with no additional explanations.
             formatted_steps.append(f"{i}. {step}")
 
         return "\n".join(formatted_steps)
+
+    @trace_agent_call("generator")
+    def _call_llm(self, system_prompt: str, user_prompt: str) -> str:
+        """
+        Call LLM with appropriate message structure based on model type.
+        """
+        # Import token tracker
+        from utils.token_tracker import token_tracker
+
+        # Create appropriate messages based on model type
+        if self.model_config.supports_reasoning(self.model_name):
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+        else:
+            messages = [
+                {"role": "user", "content": user_prompt}
+            ]
+
+        if self.model_name == "claude-3-7-sonnet-latest":
+            resp = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                max_tokens=64000,
+                extra_body={ "thinking": { "type": "enabled", "budget_tokens": 2000 } },
+            )
+        else:
+            resp = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages
+            )
+
+        # Track token usage
+        if hasattr(resp, 'usage') and resp.usage:
+            token_tracker.log_tokens(
+                agent_name="generator",
+                model_name=self.model_name,
+                prompt_tokens=resp.usage.prompt_tokens,
+                completion_tokens=resp.usage.completion_tokens,
+                total_tokens=resp.usage.total_tokens
+            )
+
+        return resp.choices[0].message.content
 
     def _generate_basic_template(self, vulnerability_info: Dict, exploit_plan: Dict) -> str:
         """

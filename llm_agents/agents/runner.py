@@ -9,6 +9,7 @@ from openai import OpenAI
 
 from ..config import ModelConfig
 from utils.print_utils import print_step, print_warning, print_success, create_progress_spinner
+from utils.langsmith_tracing import trace_agent_call
 
 class ExploitRunner:
     """
@@ -183,31 +184,10 @@ Please fix the code to make the test pass. Common issues to check:
 
 IMPORTANT: Return ONLY the complete fixed code with no explanation or markdown.
 """
-            # Create appropriate messages based on model type
-            if self.model_config.supports_reasoning(self.model_name):
-                messages = [
-                    {"role": "system", "content": "You are an expert at fixing Foundry test contracts. Your task is to fix a failing test by analyzing error messages and correcting the code."},
-                    {"role": "user", "content": prompt}
-                ]
-            else:
-                messages = [
-                    {"role": "user", "content": prompt}
-                ]
+            system_prompt = "You are an expert at fixing Foundry test contracts. Your task is to fix a failing test by analyzing error messages and correcting the code."
 
-            if self.model_name == "claude-3-7-sonnet-latest":
-                resp = self.client.chat.completions.create(
-                    model=self.model_name,
-                    messages=messages,
-                    max_tokens=64000,
-                    extra_body={ "thinking": { "type": "enabled", "budget_tokens": 2000 } },
-                )
-            else:
-                resp = self.client.chat.completions.create(
-                    model=self.model_name,
-                    messages=messages
-                )
-
-            fixed_code = resp.choices[0].message.content.strip()
+            # Call LLM
+            fixed_code = self._call_llm(system_prompt, prompt).strip()
 
             # Clean up the response if it has markdown code blocks
             if fixed_code.startswith("```") and fixed_code.endswith("```"):
@@ -219,3 +199,47 @@ IMPORTANT: Return ONLY the complete fixed code with no explanation or markdown.
         except Exception as e:
             print_warning(f"Error fixing test code: {str(e)}")
             return None
+
+    @trace_agent_call("runner")
+    def _call_llm(self, system_prompt: str, user_prompt: str) -> str:
+        """
+        Call LLM with appropriate message structure based on model type.
+        """
+        # Import token tracker
+        from utils.token_tracker import token_tracker
+
+        # Create appropriate messages based on model type
+        if self.model_config.supports_reasoning(self.model_name):
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+        else:
+            messages = [
+                {"role": "user", "content": user_prompt}
+            ]
+
+        if self.model_name == "claude-3-7-sonnet-latest":
+            resp = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                max_tokens=64000,
+                extra_body={ "thinking": { "type": "enabled", "budget_tokens": 2000 } },
+            )
+        else:
+            resp = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages
+            )
+
+        # Track token usage
+        if hasattr(resp, 'usage') and resp.usage:
+            token_tracker.log_tokens(
+                agent_name="runner",
+                model_name=self.model_name,
+                prompt_tokens=resp.usage.prompt_tokens,
+                completion_tokens=resp.usage.completion_tokens,
+                total_tokens=resp.usage.total_tokens
+            )
+
+        return resp.choices[0].message.content

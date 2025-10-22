@@ -11,6 +11,7 @@ from llm_agents.agent_coordinator import AgentCoordinator
 from llm_agents.config import ModelConfig
 from utils.print_utils import *
 from utils.token_tracker import performance_tracker
+from utils.langsmith_tracing import setup_langsmith
 
 
 def parse_scope_file(scope_file_path, base_dir):
@@ -230,6 +231,9 @@ def parse_arguments():
 
 def main():
     print_header("Smart Contract Vulnerability Analyzer")
+
+    # Setup LangSmith tracing (reads from environment variables)
+    setup_langsmith()
 
     # Start performance tracking
     performance_tracker.reset()

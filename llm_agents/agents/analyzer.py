@@ -7,6 +7,7 @@ import json
 import logging
 import os
 from utils.print_utils import print_warning, create_progress_spinner
+from utils.langsmith_tracing import trace_agent_call
 from openai import OpenAI
 from langchain.schema import Document
 from .project_context_llm import ProjectContextLLMAgent
@@ -255,6 +256,7 @@ Format findings as:
         )
         return full_prompt
 
+    @trace_agent_call("analyzer")
     def _call_llm(self, system_prompt: str, user_prompt: str) -> str:
         """
         Use openai.ChatCompletion with the appropriate messaging structure based on model type.

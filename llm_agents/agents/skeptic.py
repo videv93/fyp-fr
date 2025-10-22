@@ -6,6 +6,7 @@ import json
 from openai import OpenAI
 import re
 from utils.print_utils import create_progress_spinner, print_warning
+from utils.langsmith_tracing import trace_agent_call
 
 class SkepticAgent:
     """
@@ -86,44 +87,8 @@ class SkepticAgent:
             user_prompt += """Please re-check each vulnerability from #0, #1, #2, etc.
     Return a JSON object with the final verdict.
     """
-            # Call LLM with appropriate message structure
-            if self.model_config.supports_reasoning(self.model_name):
-                messages = [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ]
-            else:
-                messages = [
-                    {"role": "user", "content": system_prompt + user_prompt}
-                ]
-
-            # Import token tracker
-            from utils.token_tracker import token_tracker
-            
-            if self.model_name == "claude-3-7-sonnet-latest":
-                resp = self.client.chat.completions.create(
-                    model=self.model_name,
-                    messages=messages,
-                    max_tokens=64000,
-                    extra_body={ "thinking": { "type": "enabled", "budget_tokens": 5000 } },
-                )
-            else:
-                resp = self.client.chat.completions.create(
-                    model=self.model_name,
-                    messages=messages
-                )
-                
-            # Track token usage
-            if hasattr(resp, 'usage') and resp.usage:
-                token_tracker.log_tokens(
-                    agent_name="skeptic",
-                    model_name=self.model_name,
-                    prompt_tokens=resp.usage.prompt_tokens,
-                    completion_tokens=resp.usage.completion_tokens,
-                    total_tokens=resp.usage.total_tokens
-                )
-                
-            text_out = resp.choices[0].message.content.strip()
+            # Call LLM
+            text_out = self._call_llm(system_prompt, user_prompt)
 
             # Parse results
             progress.update(task, description="Processing results...")
@@ -144,6 +109,50 @@ class SkepticAgent:
             progress.update(task, completed=True)
 
         return sorted(vulnerabilities, key=lambda x: x.get("skeptic_confidence", 0), reverse=True)
+
+    @trace_agent_call("skeptic")
+    def _call_llm(self, system_prompt: str, user_prompt: str) -> str:
+        """
+        Call LLM with appropriate message structure based on model type.
+        """
+        # Import token tracker
+        from utils.token_tracker import token_tracker
+
+        # Call LLM with appropriate message structure
+        if self.model_config.supports_reasoning(self.model_name):
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+        else:
+            messages = [
+                {"role": "user", "content": system_prompt + user_prompt}
+            ]
+
+        if self.model_name == "claude-3-7-sonnet-latest":
+            resp = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                max_tokens=64000,
+                extra_body={ "thinking": { "type": "enabled", "budget_tokens": 5000 } },
+            )
+        else:
+            resp = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages
+            )
+
+        # Track token usage
+        if hasattr(resp, 'usage') and resp.usage:
+            token_tracker.log_tokens(
+                agent_name="skeptic",
+                model_name=self.model_name,
+                prompt_tokens=resp.usage.prompt_tokens,
+                completion_tokens=resp.usage.completion_tokens,
+                total_tokens=resp.usage.total_tokens
+            )
+
+        return resp.choices[0].message.content.strip()
 
     def _parse_response(self, text_out: str) -> list:
         try:

@@ -9,6 +9,7 @@ import json
 import logging
 from openai import OpenAI
 from utils.print_utils import create_progress_spinner
+from utils.langsmith_tracing import trace_agent_call
 
 logger = logging.getLogger(__name__)
 
@@ -197,6 +198,7 @@ class ProjectContextLLMAgent:
                 }
             }
     
+    @trace_agent_call("project_context")
     def _call_llm(self, system_prompt: str, user_prompt: str) -> str:
         # Import token tracker
         from utils.token_tracker import token_tracker
